@@ -1,9 +1,11 @@
 #!/bin/sh
 set -e
 
+ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+
 if [ -n "$FIREBASE_SERVICE_ACCOUNT_JSON" ]; then
-  printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > /app/apps/api/firebase-service-account.json
-  export FIREBASE_SERVICE_ACCOUNT=/app/apps/api/firebase-service-account.json
+  printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$ROOT/firebase-service-account.json"
+  export FIREBASE_SERVICE_ACCOUNT="$ROOT/firebase-service-account.json"
 fi
 
-exec node /app/apps/api/dist/main.js
+exec node "$ROOT/dist/main.js"
