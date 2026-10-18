@@ -1,9 +1,12 @@
 FROM node:22-bookworm-slim
 
+# Node 22 ships npm 10, which crashes on this tree with "edgesOut".
+RUN npm install -g npm@11.17.0
+
 WORKDIR /app
 
-COPY package.json ./
-RUN npm install --include=dev
+COPY package.json package-lock.json ./
+RUN npm ci --include=dev
 
 COPY nest-cli.json tsconfig.json tsconfig.build.json ./
 COPY src ./src
