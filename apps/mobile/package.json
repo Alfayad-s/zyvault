@@ -1,0 +1,13 @@
+{
+  "name": "mobile",
+  "private": true,
+  "scripts": {
+    "dev": "flutter run",
+    "dev:device": "bash scripts/run-device.sh",
+    "build": "flutter build apk",
+    "build:share": "bash scripts/share-apk.sh",
+    "build:share:clean": "bash scripts/share-apk.sh --clean",
+    "lint": "flutter analyze",
+    "test": "flutter test"
+  }
+}

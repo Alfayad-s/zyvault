@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Turbo / Nest build output
+.turbo/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+**/ios/Flutter/ephemeral/
+**/ios/Pods/
+
+# Android local SDK path, Gradle cache, and signing keys
+**/local.properties
+**/.gradle/
+**/.kotlin/
+**/captures/
+**/.cxx/
+key.properties
+**/*.keystore
+**/*.jks
+
+# Built apps — share locally, do not commit
+share-apk/*.apk
+*.apk
+*.aab
+*.ipa
+
+# Secrets
+.env
+.env.*
+!.env.example
+firebase-service-account*.json
+**/credentials.json
+**/*-credentials.json
+*.pem
+
+# Local scratch
+.tmp-pg/
+
+# Editors and OS
+.idea/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+*.log

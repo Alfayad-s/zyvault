@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "966445777552",
+    "project_id": "zyvault-38f8e",
+    "storage_bucket": "zyvault-38f8e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:966445777552:android:73befc9fe7dc77bb0e4e15",
+        "android_client_info": {
+          "package_name": "com.financetrack.finance_track"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyALBdnIPM0uggOeBvaX76iA7c0D4wOJ3yg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

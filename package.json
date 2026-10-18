@@ -1,0 +1,18 @@
+{
+  "name": "finance-track",
+  "private": true,
+  "packageManager": "pnpm@11.22.0",
+  "scripts": {
+    "dev": "turbo dev --filter=api",
+    "dev:mobile": "turbo dev --filter=mobile",
+    "dev:mobile:device": "bash apps/mobile/scripts/run-device.sh",
+    "build": "turbo build",
+    "build:apk": "pnpm --filter mobile build:share",
+    "build:apk:fresh": "pnpm --filter mobile build:share:clean",
+    "lint": "turbo lint",
+    "test": "turbo test"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.8"
+  }
+}

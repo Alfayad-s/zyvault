@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">Your balance, plus quick voice or typed logging</string>
+    <string name="widget_balance_title">All accounts</string>
+    <string name="widget_open_app">Open the app once to show your balance</string>
+    <string name="widget_speak">Speak</string>
+    <string name="widget_type">Type</string>
+</resources>
