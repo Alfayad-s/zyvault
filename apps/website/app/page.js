@@ -1,35 +1,5 @@
-const benefits = [
-  {
-    title: 'Just say it',
-    body: 'Type or speak “450 pizza last night” or “35k salary on 6th”. You see the line before it is saved.',
-    icon: 'mic',
-  },
-  {
-    title: 'Payments caught',
-    body: 'Bank SMS and GPay, PhonePe or Paytm alerts become one question: where did this ₹500 go?',
-    icon: 'bell',
-  },
-  {
-    title: 'Budgets & goals',
-    body: 'A limit for food, a Goa trip, and a note of who owes whom. zyvault warns you at 80%.',
-    icon: 'target',
-  },
-  {
-    title: 'Plans & reminders',
-    body: 'Salary on the 1st, rent on the 5th, send ₹500 to Ravi at 6 pm. It reminds you, then records it.',
-    icon: 'cal',
-  },
-  {
-    title: 'Ask your money',
-    body: '“How much on food this month?” “Who owes me?” The answer comes back with a chart.',
-    icon: 'chat',
-  },
-  {
-    title: 'Private on the phone',
-    body: 'Messages stay on the device. You confirm a spend before it is saved, and a fingerprint locks the app.',
-    icon: 'lock',
-  },
-];
+import { Frame } from '../components/frame';
+import { faqs, features, steps } from '../lib/site';
 
 const marks = ['Cash', 'Every bank', 'UPI', 'Voice', 'Budgets', 'Goals'];
 
@@ -52,78 +22,100 @@ function Icon({ name }) {
 
 export default function HomePage() {
   return (
-    <div className="page">
-      <div className="shell">
-        <header className="nav">
-          <a className="wordmark" href="#top">
-            zyvault<span className="dot">.</span>
-          </a>
-          <nav>
-            <a href="#top">Home</a>
-            <a href="#benefits">Features</a>
-            <a href="#benefits">How it works</a>
-            <a href="#privacy">Privacy</a>
-          </nav>
-          <a className="nav-btn" href="/zyvault.apk" download="zyvault.apk">
+    <Frame>
+      <section className="hero" id="top">
+        <p className="proof">Android app for everyday rupees</p>
+        <h1>
+          Take control of your
+          <br />
+          money by talking
+        </h1>
+        <p className="lede">
+          zyvault is an Android app for spends, income, plans and goals. Say what you spent, catch UPI payments on the phone, and keep budgets in one calm place.
+        </p>
+        <div className="actions">
+          <a className="cta" href="/zyvault.apk" download="zyvault.apk">
             Download APK
           </a>
-        </header>
+          <a className="cta ghost" href="#how">
+            See how it works
+          </a>
+        </div>
+      </section>
 
-        <section className="hero" id="top">
-          <p className="proof">Everyday spends, income, plans and goals</p>
-          <h1>
-            Take control of your
-            <br />
-            money by talking
-          </h1>
-          <p className="lede">
-            zyvault is an Android app for rupees. Say what you spent, catch UPI payments, and keep budgets in one calm place.
-          </p>
-          <div className="actions">
-            <a className="cta" href="/zyvault.apk" download="zyvault.apk">
-              Download APK
-            </a>
-            <a className="cta ghost" href="#benefits">
-              See how it works
-            </a>
-          </div>
-        </section>
+      <section className="marks" aria-label="What zyvault covers">
+        <p>Made for the way money actually moves</p>
+        <ul>
+          {marks.map((mark) => (
+            <li key={mark}>{mark}</li>
+          ))}
+        </ul>
+      </section>
 
-        <section className="marks">
-          <p>Made for the way money actually moves</p>
-          <ul>
-            {marks.map((mark) => (
-              <li key={mark}>{mark}</li>
-            ))}
-          </ul>
-        </section>
+      <section className="benefits" id="benefits">
+        <p className="pill">Features</p>
+        <h2>A quieter way to track money</h2>
+        <p className="sub">
+          Speak a spend, confirm it, and let plans, budgets and questions live next to the balance.
+        </p>
+        <div className="grid">
+          {features.map((item) => (
+            <article key={item.title} id={item.icon === 'lock' ? 'privacy' : undefined}>
+              <span className="icon">
+                <Icon name={item.icon} />
+              </span>
+              <h3>{item.title}</h3>
+              <p>{item.body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
 
-        <section className="benefits" id="benefits">
-          <p className="pill">Features</p>
-          <h2>A quieter way to track money</h2>
-          <p className="sub">
-            Speak a spend, confirm it, and let plans, budgets and questions live next to the balance.
-          </p>
-          <div className="grid">
-            {benefits.map((item) => (
-              <article key={item.title} id={item.icon === 'lock' ? 'privacy' : undefined}>
-                <span className="icon">
-                  <Icon name={item.icon} />
-                </span>
-                <h3>{item.title}</h3>
-                <p>{item.body}</p>
-              </article>
-            ))}
-          </div>
-        </section>
+      <section className="split" id="how">
+        <p className="pill">How it works</p>
+        <h2>Three steps, then it is saved</h2>
+        <ol className="steps">
+          {steps.map((step, index) => (
+            <li key={step.title}>
+              <span>{index + 1}</span>
+              <h3>{step.title}</h3>
+              <p>{step.body}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
 
-        <footer>
-          <span>
-            zyvault<span className="dot">.</span>
-          </span>
-          <span>An Android app for everyday money.</span>
-        </footer>
-      </div>
-    </div>
+      <section className="prose" id="about">
+        <p className="pill">About</p>
+        <h2>What zyvault is</h2>
+        <p>
+          zyvault is a personal finance app for Android. It keeps a record of cash and bank accounts in rupees: what came in, what went out, what is planned, and what you are saving for.
+        </p>
+        <p>
+          You add a line by typing or speaking, including Malayalam and Hinglish, or by photographing a bill. If you allow it, a bank SMS or a payment alert from GPay, PhonePe, Paytm, BHIM or CRED can start the same question. You still confirm the category before it is saved.
+        </p>
+        <p>
+          zyvault is not a bank and it does not send money. Paying someone still happens in your own UPI or bank app. The ledger is the part that used to live in a notebook.
+        </p>
+        <p>
+          <a className="text-link" href="/about">
+            Read the full about page
+          </a>
+        </p>
+      </section>
+
+      <section className="faq" id="faq">
+        <p className="pill">FAQ</p>
+        <h2>Questions people ask</h2>
+        <div className="faq-list">
+          {faqs.map((item) => (
+            <article key={item.question}>
+              <h3>{item.question}</h3>
+              <p>{item.answer}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+    </Frame>
   );
 }
