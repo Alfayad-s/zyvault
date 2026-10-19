@@ -33,6 +33,7 @@ key.properties
 # Built apps — share locally, do not commit
 share-apk/*.apk
 *.apk
+!apps/website/public/zyvault.apk
 *.aab
 *.ipa
 
