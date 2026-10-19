@@ -9,6 +9,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { BanksModule } from './banks/banks.module.js';
 import { BudgetsModule } from './budgets/budgets.module.js';
 import { CategoriesModule } from './categories/categories.module.js';
+import { ChatModule } from './chat/chat.module.js';
 import { DebtsModule } from './debts/debts.module.js';
 import { GoalsModule } from './goals/goals.module.js';
 import { HealthController } from './health.controller.js';
@@ -34,6 +35,7 @@ import { TransactionsModule } from './transactions/transactions.module.js';
     DebtsModule,
     GoalsModule,
     AskModule,
+    ChatModule,
     PushModule,
   ],
   controllers: [AppController, HealthController],

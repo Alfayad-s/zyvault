@@ -6,6 +6,7 @@ import 'package:finance_track/ledger.dart';
 import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
 import 'package:finance_track/widgets/category_icon.dart';
+import 'package:finance_track/widgets/shimmer.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -510,9 +511,11 @@ class _GoalSheetState extends State<_GoalSheet> {
               ),
               const SizedBox(height: 6),
               if (entries == null)
-                const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(child: CircularProgressIndicator()),
+                const ShimmerRows(
+                  count: 3,
+                  scroll: false,
+                  inset: 0,
+                  padding: EdgeInsets.symmetric(vertical: 8),
                 )
               else if (entries.isEmpty)
                 const Padding(

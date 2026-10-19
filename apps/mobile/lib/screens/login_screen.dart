@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:finance_track/api/finance_api.dart';
+import 'package:finance_track/widgets/shimmer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -459,15 +460,7 @@ class _PrimaryButton extends StatelessWidget {
           ),
           textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
         ),
-        child: busy
-            ? const SizedBox.square(
-                dimension: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.4,
-                  color: Colors.white,
-                ),
-              )
-            : Text(label),
+        child: busy ? const ShimmerBusy() : Text(label),
       ),
     );
   }

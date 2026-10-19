@@ -3,6 +3,7 @@ import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
 import 'package:finance_track/reminders.dart';
 import 'package:finance_track/widgets/category_icon.dart';
+import 'package:finance_track/widgets/shimmer.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -100,9 +101,17 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
               ),
             )
           else if (items == null)
-            const Padding(
-              padding: EdgeInsets.all(48),
-              child: Center(child: CircularProgressIndicator()),
+            Container(
+              decoration: BoxDecoration(
+                color: _card,
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: const ShimmerRows(
+                count: 4,
+                scroll: false,
+                inset: 16,
+                padding: EdgeInsets.symmetric(vertical: 6),
+              ),
             )
           else if (items.isEmpty)
             const _Empty()

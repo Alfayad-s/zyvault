@@ -8,6 +8,7 @@ import 'package:finance_track/notifications.dart';
 import 'package:finance_track/push.dart';
 import 'package:finance_track/reminders.dart';
 import 'package:finance_track/screens/accounts_screen.dart';
+import 'package:finance_track/screens/chat_screen.dart';
 import 'package:finance_track/screens/home_screen.dart';
 import 'package:finance_track/screens/profile_screen.dart';
 import 'package:finance_track/screens/scheduled_screen.dart';
@@ -181,6 +182,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       _foreground = true;
       Notifier.markForeground(true);
       ledger.catchUpSchedules();
+      if (ledger.summary == null && !ledger.loading) ledger.refresh();
       _watchMoneyAlerts();
       _syncReminders();
     } else if (state == AppLifecycleState.paused ||
@@ -200,7 +202,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     try {
       final pending = await SmsInbox.pending();
       if (pending.isEmpty || !mounted) return;
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
       await reviewBankSms(context, ledger: ledger, messages: pending);
+    } catch (error) {
+      debugPrint('Could not open a payment: $error');
     } finally {
       _reviewingSms = false;
     }
@@ -273,6 +279,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         ),
         title: Text(FinanceBottomBar.labels[_index]),
         actions: [
+          IconButton(
+            tooltip: 'Chat',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (context) => ChatScreen(api: widget.api),
+                ),
+              );
+            },
+            icon: const Icon(LucideIcons.messageCircle),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: IconButton(

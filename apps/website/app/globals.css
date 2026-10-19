@@ -311,6 +311,18 @@ h1 {
   text-align: left;
 }
 
+.prose.legal h2 {
+  margin-top: 32px;
+  font-size: 22px;
+  letter-spacing: -0.03em;
+}
+
+.prose.legal .updated {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .text-link {
   color: var(--ink);
   font-weight: 700;

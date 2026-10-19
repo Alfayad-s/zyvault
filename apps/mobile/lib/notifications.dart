@@ -62,17 +62,21 @@ class Notifier {
 
   static Future<void> askPermission() async {
     if (!_supported) return;
-    await init();
-    await plugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.requestNotificationsPermission();
-    await plugin
-        .resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin
-        >()
-        ?.requestPermissions(alert: true, sound: true);
+    try {
+      await init();
+      await plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.requestNotificationsPermission();
+      await plugin
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >()
+          ?.requestPermissions(alert: true, sound: true);
+    } catch (error) {
+      debugPrint('Could not ask for notifications: $error');
+    }
   }
 
   /// Lets the native SMS receiver skip notifying while the app is on screen.

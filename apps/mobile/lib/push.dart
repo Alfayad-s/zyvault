@@ -80,6 +80,7 @@ class Push {
       );
       final preferences = await SharedPreferences.getInstance();
       await preferences.setBool(_serverPushKey, server);
+      debugPrint(server ? 'Server push is on' : 'Server push is off: Firebase is not configured on the server');
     } catch (caught) {
       debugPrint('Could not register for push: $caught');
     }

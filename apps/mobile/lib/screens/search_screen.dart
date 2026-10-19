@@ -3,6 +3,7 @@ import 'package:finance_track/ledger.dart';
 import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
 import 'package:finance_track/screens/transaction_form_screen.dart';
+import 'package:finance_track/widgets/shimmer.dart';
 import 'package:flutter/material.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -79,7 +80,7 @@ class _SearchScreenState extends State<SearchScreen> {
         ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const ShimmerRows()
           : _error != null
           ? Center(child: Text('$_error', textAlign: TextAlign.center))
           : matches.isEmpty

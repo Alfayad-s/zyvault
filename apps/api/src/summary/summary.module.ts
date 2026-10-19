@@ -8,5 +8,6 @@ import { SummaryService } from './summary.service.js';
   imports: [SupabaseModule, AuthModule],
   controllers: [SummaryController],
   providers: [SummaryService],
+  exports: [SummaryService],
 })
 export class SummaryModule {}

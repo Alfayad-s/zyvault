@@ -13,6 +13,7 @@ export const site = {
   title: 'zyvault — an Android money tracker you talk to',
   description:
     'zyvault is an Android app for rupees. Say a spend in English, Malayalam or Hinglish, catch bank SMS and UPI alerts on the phone, and keep budgets, goals and who owes whom.',
+  contactEmail: 'hello@clawdage.com',
 };
 
 export const features = [
@@ -179,6 +180,9 @@ zyvault is a personal Android finance tracker for rupees. It is not a bank and i
 - Languages for entry: English, Malayalam, Hinglish
 - Site: ${url}
 - About: ${url}/about
+- Privacy: ${url}/privacy
+- Terms: ${url}/terms
+- Account deletion: ${url}/privacy#delete
 - APK: ${url}/zyvault.apk
 
 ## What it does

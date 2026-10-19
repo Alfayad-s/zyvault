@@ -24,7 +24,8 @@ export function Frame({ children }) {
           <nav aria-label="Footer">
             <a href="/about">About</a>
             <a href="/#faq">FAQ</a>
-            <a href="/#privacy">Privacy</a>
+            <a href="/privacy">Privacy</a>
+            <a href="/terms">Terms</a>
             <a href="/llms.txt">Product facts</a>
           </nav>
         </footer>

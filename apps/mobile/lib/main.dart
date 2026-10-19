@@ -5,6 +5,7 @@ import 'package:finance_track/screens/login_screen.dart';
 import 'package:finance_track/screens/onboarding_screen.dart';
 import 'package:finance_track/screens/shell.dart';
 import 'package:finance_track/session.dart';
+import 'package:finance_track/widgets/shimmer.dart';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -102,9 +103,7 @@ class _FinanceTrackAppState extends State<FinanceTrackApp>
         listenable: _session,
         builder: (context, _) {
           if (!_session.ready) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
+            return const BootShimmer();
           }
           if (!_session.signedIn) {
             _api = null;

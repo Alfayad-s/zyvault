@@ -1,5 +1,6 @@
 import 'package:finance_track/app_lock.dart';
 import 'package:finance_track/ledger.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:finance_track/models.dart';
 import 'package:finance_track/notifications.dart';
 import 'package:finance_track/push.dart';
@@ -226,11 +227,23 @@ class _AlertSettingsState extends State<_AlertSettings> {
         return;
       }
       setState(() => _apps = true);
-      await Notifier.askPermission();
-      await widget.onCheckSms?.call();
+      await _afterAlertsOn();
     } catch (_) {
       if (!mounted) return;
       ProfileScreen._show(context, 'Could not turn on UPI app alerts. Try again');
+    }
+  }
+
+  Future<void> _afterAlertsOn() async {
+    try {
+      await Notifier.askPermission();
+    } catch (error) {
+      debugPrint('Notification permission: $error');
+    }
+    try {
+      await widget.onCheckSms?.call();
+    } catch (error) {
+      debugPrint('Payment alert watch: $error');
     }
   }
 
@@ -266,8 +279,7 @@ class _AlertSettingsState extends State<_AlertSettings> {
         return;
       }
       setState(() => _sms = true);
-      await Notifier.askPermission();
-      await widget.onCheckSms?.call();
+      await _afterAlertsOn();
     } catch (_) {
       if (!mounted) return;
       ProfileScreen._show(context, 'Could not turn on bank SMS. Try again');

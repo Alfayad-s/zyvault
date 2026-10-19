@@ -118,6 +118,13 @@ Object? _tryJson(String body) {
   }
 }
 
+class ChatAnswer {
+  const ChatAnswer({required this.reply, this.proposal});
+
+  final String reply;
+  final Map<String, dynamic>? proposal;
+}
+
 class FinanceApi {
   FinanceApi({
     this._token,
@@ -230,6 +237,54 @@ class FinanceApi {
 
   Future<void> deleteCategory(String id) async {
     await _send('DELETE', '/categories/$id');
+  }
+
+  Future<ChatAnswer> chat({
+    required String today,
+    required List<Map<String, String>> messages,
+    String memory = '',
+  }) async {
+    final tail = [
+      for (final message in (messages.length > 8 ? messages.sublist(messages.length - 8) : messages))
+        {
+          'role': message['role'] ?? 'user',
+          'content': (message['content'] ?? '').length > 400
+              ? (message['content'] ?? '').substring(0, 400)
+              : (message['content'] ?? ''),
+        },
+    ];
+    final remembered = memory.length > 800 ? memory.substring(0, 800) : memory;
+    final Object? body;
+    try {
+      body = await _send(
+        'POST',
+        '/chat',
+        body: {
+          'today': today,
+          'messages': tail,
+          if (remembered.isNotEmpty) 'memory': remembered,
+        },
+        timeout: const Duration(seconds: 20),
+      );
+    } on TimeoutException {
+      throw FinanceException('The chatbot did not answer in time');
+    } on http.ClientException catch (caught) {
+      throw FinanceException(caught.message);
+    }
+    final map = body as Map<String, dynamic>?;
+    final reply = map?['reply'];
+    if (reply is! String || reply.isEmpty) {
+      throw FinanceException('The chatbot returned an empty reply');
+    }
+    final proposal = map?['proposal'];
+    return ChatAnswer(
+      reply: reply,
+      proposal: proposal is Map<String, dynamic> ? proposal : null,
+    );
+  }
+
+  Future<void> applyChat(Map<String, dynamic> action) async {
+    await _send('POST', '/chat/apply', body: {'action': action});
   }
 
   Future<AskAnswer> ask({
@@ -584,15 +639,27 @@ class FinanceApi {
     Map<String, dynamic>? body,
     Duration timeout = const Duration(seconds: 15),
   }) async {
-    final token = await tokenProvider?.call() ?? _token;
-    if (token == null) throw AuthExpiredException();
-    var response = await _request(method, path, token, body, timeout);
-    if (response.statusCode == 401 && onTokenRejected != null) {
-      final renewed = await onTokenRejected!();
-      if (renewed == null) throw AuthExpiredException();
-      response = await _request(method, path, renewed, body, timeout);
+    try {
+      final token = await tokenProvider?.call() ?? _token;
+      if (token == null) throw AuthExpiredException();
+      var response = await _request(method, path, token, body, timeout);
+      if (response.statusCode == 401 && onTokenRejected != null) {
+        final renewed = await onTokenRejected!();
+        if (renewed == null) throw AuthExpiredException();
+        response = await _request(method, path, renewed, body, timeout);
+      }
+      return _decode(response);
+    } on AuthExpiredException {
+      rethrow;
+    } on FinanceException {
+      rethrow;
+    } on TimeoutException {
+      throw FinanceException(
+        'Could not reach the server. Start the API, then try again.',
+      );
+    } on http.ClientException {
+      throw FinanceException('Could not reach the server');
     }
-    return _decode(response);
   }
 
   Future<http.Response> _request(

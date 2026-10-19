@@ -7,6 +7,7 @@ import 'package:finance_track/screens/type_page.dart';
 import 'package:finance_track/widgets/bank_logo.dart';
 import 'package:finance_track/widgets/category_icon.dart';
 import 'package:finance_track/widgets/operations_card.dart';
+import 'package:finance_track/widgets/shimmer.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -35,15 +36,25 @@ class HomeScreen extends StatelessWidget {
       builder: (context, _) {
         final summary = ledger.summary;
         if (ledger.loading && summary == null) {
-          return const Center(child: CircularProgressIndicator());
+          return const _HomeShimmer();
         }
         if (summary == null) {
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
-              child: Text(
-                _errorText(ledger.error),
-                textAlign: TextAlign.center,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _errorText(ledger.error),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: ledger.loading ? null : ledger.refresh,
+                    child: const Text('Try again'),
+                  ),
+                ],
               ),
             ),
           );
@@ -855,6 +866,116 @@ class _CardAction extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _HomeShimmer extends StatelessWidget {
+  const _HomeShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    const bone = Color(0xFF3A3A3C);
+    return Shimmer(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 28, 20, 120),
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Column(
+          children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: Color(0xFF2C2C2E),
+              borderRadius: BorderRadius.all(Radius.circular(28)),
+            ),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(12, 12, 12, 12),
+              child: Column(
+                children: [
+                  ShimmerBone(
+                    width: double.infinity,
+                    height: 176,
+                    radius: 22,
+                    color: bone,
+                  ),
+                  SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ShimmerBone(height: 18, radius: 9, color: bone),
+                      ),
+                      SizedBox(width: 28),
+                      Expanded(
+                        child: ShimmerBone(height: 18, radius: 9, color: bone),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SizedBox(height: 16),
+          SizedBox(
+            height: 136,
+            child: Row(
+              children: [
+                Expanded(child: ShimmerBone(height: 136, radius: 22)),
+                SizedBox(width: 12),
+                Expanded(child: ShimmerBone(height: 136, radius: 22)),
+              ],
+            ),
+          ),
+          SizedBox(height: 16),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: Color(0xFF2C2C2E),
+              borderRadius: BorderRadius.all(Radius.circular(28)),
+            ),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(18, 18, 18, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ShimmerBone(width: 128, height: 22, radius: 8, color: bone),
+                  SizedBox(height: 8),
+                  _HomeShimmerRow(),
+                  _HomeShimmerRow(),
+                  _HomeShimmerRow(),
+                ],
+              ),
+            ),
+          ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeShimmerRow extends StatelessWidget {
+  const _HomeShimmerRow();
+
+  @override
+  Widget build(BuildContext context) {
+    const bone = Color(0xFF3A3A3C);
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          ShimmerBone(width: 40, height: 40, radius: 14, color: bone),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ShimmerBone(width: 120, height: 14, radius: 7, color: bone),
+                SizedBox(height: 8),
+                ShimmerBone(width: 72, height: 11, radius: 6, color: bone),
+              ],
+            ),
+          ),
+          ShimmerBone(width: 52, height: 14, radius: 7, color: bone),
+        ],
       ),
     );
   }

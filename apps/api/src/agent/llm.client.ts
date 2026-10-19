@@ -7,7 +7,14 @@ const googleBillTimeoutMs = 30_000;
 const groqTimeoutMs = 10_000;
 const openRouterTimeoutMs = 25_000;
 
-const groqFreeModels = ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-20b'];
+/** Reserved for the chatbot. Its 200k daily tokens are separate from the parser models. */
+export const groqChatModel = 'openai/gpt-oss-20b';
+
+/** Parser fallbacks. gpt-oss-20b is not included, so a chat day does not burn spend parsing. */
+const groqParserModels = ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b'];
+
+/** Caps the reply, including a review action, so one chat turn stays bounded. */
+export const chatMaxTokens = 700;
 
 const openRouterFreeModels = [
   'google/gemma-4-31b-it:free',
@@ -24,6 +31,14 @@ class NotConfigured extends Error {}
 export type BillImage = { mimeType: string; data: string };
 
 type Chat = { instruction: string; prompt: string; deadline: number; image?: BillImage };
+
+export type ChatMessage = { role: 'user' | 'assistant'; content: string };
+
+export function parserModels(configured?: string): string[] {
+  const chosen = configured?.trim();
+  if (!chosen || chosen === groqChatModel) return groqParserModels;
+  return [chosen];
+}
 
 @Injectable()
 export class LlmClient {
@@ -124,10 +139,78 @@ export class LlmClient {
     return text;
   }
 
+  async chat(instruction: string, messages: ChatMessage[]): Promise<string> {
+    const key = this.config.get<string>('GROQ_API_KEY');
+    if (!key) {
+      throw new ServiceUnavailableException('The chatbot is not configured');
+    }
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify({
+          model: groqChatModel,
+          reasoning_effort: 'low',
+          max_tokens: chatMaxTokens,
+          temperature: 0.2,
+          response_format: { type: 'json_object' },
+          messages: [{ role: 'system', content: instruction }, ...messages],
+        }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (response.status === 429) {
+        throw new ServiceUnavailableException(
+          'The daily AI allowance is used. Type the amount and what it was for on Home to save it on this phone.',
+        );
+      }
+      if (response.status === 400) {
+        const again = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${key}`,
+          },
+          body: JSON.stringify({
+            model: groqChatModel,
+            reasoning_effort: 'low',
+            max_tokens: chatMaxTokens,
+            temperature: 0.2,
+            messages: [{ role: 'system', content: instruction }, ...messages],
+          }),
+          signal: AbortSignal.timeout(20_000),
+        });
+        if (!again.ok) {
+          throw new ServiceUnavailableException('The chatbot could not answer that. Try again.');
+        }
+        const retried = (await again.json()) as { choices?: { message?: { content?: string } }[] };
+        const fallback = retried.choices?.[0]?.message?.content?.trim();
+        if (!fallback) throw new ServiceUnavailableException('The chatbot returned an empty reply');
+        return fallback;
+      }
+      const body = (await this.json(response, 'Groq')) as {
+        choices?: { message?: { content?: string } }[];
+      };
+      const text = body.choices?.[0]?.message?.content?.trim();
+      if (!text) {
+        throw new ServiceUnavailableException('The chatbot returned an empty reply');
+      }
+      return text;
+    } catch (caught) {
+      if (caught instanceof ServiceUnavailableException) throw caught;
+      throw new ServiceUnavailableException(
+        caught instanceof Error && caught.name === 'TimeoutError'
+          ? 'The chatbot did not answer in time'
+          : 'The chatbot did not answer',
+      );
+    }
+  }
+
   private async groq(chat: Chat): Promise<string> {
     const key = this.key('GROQ_API_KEY');
-    const configured = this.config.get<string>('GROQ_MODEL');
-    const models = configured ? [configured] : groqFreeModels;
+    const models = parserModels(this.config.get<string>('GROQ_MODEL'));
     let lastError: unknown;
     for (const model of models) {
       if (Date.now() >= chat.deadline) {

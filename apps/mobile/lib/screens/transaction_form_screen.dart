@@ -4,6 +4,7 @@ import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
 import 'package:finance_track/widgets/account_chip.dart';
 import 'package:finance_track/widgets/category_icon.dart';
+import 'package:finance_track/widgets/shimmer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -375,13 +376,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                     ),
                   ),
                   child: _busy
-                      ? const SizedBox.square(
-                          dimension: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.4,
-                            color: Colors.white,
-                          ),
-                        )
+                      ? const ShimmerBusy()
                       : Text(_editing ? 'Save changes' : 'Save'),
                 ),
               ),
