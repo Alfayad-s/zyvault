@@ -57,7 +57,7 @@ export default function AboutPage() {
         <ul>
           <li>It does not hold, send or receive money. A payment still happens in your bank or UPI app.</li>
           <li>It does not connect to a bank with your login. Accounts are names and opening balances you enter.</li>
-          <li>It does not read messages until you allow SMS or notification access.</li>
+          <li>It does not read messages until you allow notification access.</li>
           <li>It is an APK you install yourself. This site does not claim a Play Store listing.</li>
         </ul>
 

@@ -71,7 +71,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (!SmsInbox.supported) return;
     await SmsInbox.ensureReceivePermission();
     _startPolling();
-    if (_upiAlerts == null && await SmsInbox.appsEnabled()) {
+    final watchSms = await SmsInbox.enabled();
+    final watchApps = await SmsInbox.appsEnabled();
+    if (_upiAlerts == null && (watchSms || watchApps)) {
       _upiAlerts = NotificationListenerService.notificationsStream.listen((
         event,
       ) async {

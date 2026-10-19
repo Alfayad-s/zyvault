@@ -349,7 +349,7 @@ class _AlertSettingsState extends State<_AlertSettings> {
             ),
             title: const Text('Read bank SMS', style: title),
             subtitle: const Text(
-              'Catch debit and credit messages and ask where the money went. Messages stay on this phone.',
+              'When a bank text arrives, its notification asks where the money went. The message stays on this phone.',
               style: subtitle,
             ),
             activeThumbColor: const Color(0xFF17310C),

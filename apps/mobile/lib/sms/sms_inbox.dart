@@ -29,7 +29,8 @@ class SmsInbox {
     if (!supported) return false;
     try {
       final preferences = await SharedPreferences.getInstance();
-      return preferences.getBool(_enabledKey) ?? false;
+      if (!(preferences.getBool(_enabledKey) ?? false)) return false;
+      return await NotificationListenerService.isPermissionGranted();
     } catch (_) {
       return false;
     }
@@ -48,13 +49,9 @@ class SmsInbox {
 
   static Future<String?> enable() async {
     if (!supported) return 'Reading bank SMS works only on Android';
-    final status = await Permission.sms.request();
-    if (!status.isGranted) {
-      if (status.isPermanentlyDenied) {
-        await openAppSettings();
-        return 'Allow SMS for zyvault, then turn this on again';
-      }
-      return 'SMS permission is needed to read bank messages';
+    final granted = await _notificationAccess();
+    if (!granted) {
+      return 'Turn on notification access for zyvault, then switch this on again';
     }
     try {
       final preferences = await SharedPreferences.getInstance();
@@ -66,16 +63,18 @@ class SmsInbox {
     return null;
   }
 
-  static Future<String?> enableApps() async {
-    if (!supported) return 'Reading UPI apps works only on Android';
-    bool granted;
+  static Future<bool> _notificationAccess() async {
     try {
-      granted =
-          await NotificationListenerService.isPermissionGranted() ||
+      return await NotificationListenerService.isPermissionGranted() ||
           await NotificationListenerService.requestPermission();
     } catch (_) {
-      granted = false;
+      return false;
     }
+  }
+
+  static Future<String?> enableApps() async {
+    if (!supported) return 'Reading UPI apps works only on Android';
+    final granted = await _notificationAccess();
     if (!granted) {
       return 'Turn on notification access for zyvault, then switch this on again';
     }
@@ -143,7 +142,7 @@ class SmsInbox {
         !spam.contains(senderKey(item.sender));
 
     final sms = smsOn ? await _smsAlerts() : <BankSms>[];
-    final apps = appsOn ? await _appAlerts(preferences) : <BankSms>[];
+    final apps = smsOn || appsOn ? await _appAlerts(preferences) : <BankSms>[];
     final found = mergeAlerts(
       sms.where(keep).toList(),
       apps.where(keep).toList(),
@@ -236,10 +235,8 @@ class SmsInbox {
     await preferences.setString('sms_spam_plain', spam.join(','));
   }
 
-  /// Bank SMS notifications also need RECEIVE_SMS, which Android grants with READ_SMS.
   static Future<void> ensureReceivePermission() async {
-    if (!await enabled()) return;
-    if (!await Permission.sms.isGranted) await Permission.sms.request();
+    if (!await enabled() && !await appsEnabled()) return;
     final preferences = await SharedPreferences.getInstance();
     if (!preferences.containsKey('sms_spam_plain')) {
       await _saveSpam(preferences, preferences.getStringList(_spamKey) ?? []);
@@ -259,15 +256,50 @@ class SmsInbox {
   }
 }
 
+const _smsApps = <String>{
+  'com.google.android.apps.messaging',
+  'com.android.mms',
+  'com.android.messaging',
+  'com.samsung.android.messaging',
+  'com.truecaller',
+};
+
 BankSms? alertFromNotification(ServiceNotificationEvent event) {
   if (event.hasRemoved || event.onGoing) return null;
+  final date = event.timestamp > 0
+      ? DateTime.fromMillisecondsSinceEpoch(event.timestamp)
+      : DateTime.now();
   return parseUpiNotification(
-    packageName: event.packageName,
-    title: event.title,
-    content: event.content,
-    date: event.timestamp > 0
-        ? DateTime.fromMillisecondsSinceEpoch(event.timestamp)
-        : DateTime.now(),
+        packageName: event.packageName,
+        title: event.title,
+        content: event.content,
+        date: date,
+      ) ??
+      parseSmsNotification(
+        packageName: event.packageName,
+        title: event.title,
+        content: event.content,
+        date: date,
+      );
+}
+
+BankSms? parseSmsNotification({
+  required String packageName,
+  required String title,
+  required String content,
+  required DateTime date,
+}) {
+  final sender = title.trim();
+  final body = content.trim();
+  if (sender.isEmpty || body.isEmpty) return null;
+  if (!_smsApps.contains(packageName) && bankFromSender(sender) == null) {
+    return null;
+  }
+  return parseBankSms(
+    id: smsKey(sender, body, date),
+    sender: sender,
+    body: body,
+    date: date,
   );
 }
 
