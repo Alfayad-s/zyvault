@@ -7,6 +7,7 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/mobile/package.json apps/mobile/package.json
+COPY apps/website/package.json apps/website/package.json
 
 RUN pnpm install --frozen-lockfile --config.production=false
 

@@ -27,15 +27,19 @@ class SmsInbox {
 
   static Future<bool> enabled() async {
     if (!supported) return false;
-    final preferences = await SharedPreferences.getInstance();
-    return preferences.getBool(_enabledKey) ?? false;
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      return preferences.getBool(_enabledKey) ?? false;
+    } catch (_) {
+      return false;
+    }
   }
 
   static Future<bool> appsEnabled() async {
     if (!supported) return false;
-    final preferences = await SharedPreferences.getInstance();
-    if (!(preferences.getBool(_appsKey) ?? false)) return false;
     try {
+      final preferences = await SharedPreferences.getInstance();
+      if (!(preferences.getBool(_appsKey) ?? false)) return false;
       return await NotificationListenerService.isPermissionGranted();
     } catch (_) {
       return false;
@@ -46,13 +50,19 @@ class SmsInbox {
     if (!supported) return 'Reading bank SMS works only on Android';
     final status = await Permission.sms.request();
     if (!status.isGranted) {
-      return status.isPermanentlyDenied
-          ? 'Allow SMS in Settings › Apps › zyvault › Permissions'
-          : 'SMS permission is needed to read bank messages';
+      if (status.isPermanentlyDenied) {
+        await openAppSettings();
+        return 'Allow SMS for zyvault, then turn this on again';
+      }
+      return 'SMS permission is needed to read bank messages';
     }
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setBool(_enabledKey, true);
-    await _startWindow(preferences);
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setBool(_enabledKey, true);
+      await _startWindow(preferences);
+    } catch (_) {
+      return 'Could not save the SMS setting. Try again';
+    }
     return null;
   }
 
@@ -69,9 +79,13 @@ class SmsInbox {
     if (!granted) {
       return 'Turn on notification access for zyvault, then switch this on again';
     }
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setBool(_appsKey, true);
-    await _startWindow(preferences);
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setBool(_appsKey, true);
+      await _startWindow(preferences);
+    } catch (_) {
+      return 'Could not save the UPI setting. Try again';
+    }
     return null;
   }
 

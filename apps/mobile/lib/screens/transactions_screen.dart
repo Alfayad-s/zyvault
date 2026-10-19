@@ -61,17 +61,13 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         _error = null;
       });
     } else {
-      setState(() {
-        _items = [];
-        _ready = false;
-        _error = null;
-      });
       final stored = await _cache.read(from, to);
       if (!mounted || request != _request) return;
       if (stored != null) {
         setState(() {
           _items = stored;
           _ready = true;
+          _error = null;
         });
       }
     }
@@ -82,13 +78,12 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         limit: 500,
       );
       if (!mounted || request != _request) return;
-      await _cache.write(from, to, items);
-      if (!mounted || request != _request) return;
       setState(() {
         _items = items;
         _ready = true;
         _error = null;
       });
+      await _cache.write(from, to, items);
     } on AuthExpiredException {
       await ledger.onUnauthorized?.call();
     } catch (caught) {
@@ -136,7 +131,11 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         if (_error != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: Text('$_error', textAlign: TextAlign.center),
+            child: Text(
+              '$_error',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Color(0xFFFFB4AB)),
+            ),
           ),
         if (_ready || shown.isNotEmpty)
           OperationsCard(

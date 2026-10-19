@@ -218,15 +218,20 @@ class _AlertSettingsState extends State<_AlertSettings> {
       if (mounted) setState(() => _apps = false);
       return;
     }
-    final problem = await SmsInbox.enableApps();
-    if (!mounted) return;
-    if (problem != null) {
-      ProfileScreen._show(context, problem);
-      return;
+    try {
+      final problem = await SmsInbox.enableApps();
+      if (!mounted) return;
+      if (problem != null) {
+        ProfileScreen._show(context, problem);
+        return;
+      }
+      setState(() => _apps = true);
+      await Notifier.askPermission();
+      await widget.onCheckSms?.call();
+    } catch (_) {
+      if (!mounted) return;
+      ProfileScreen._show(context, 'Could not turn on UPI app alerts. Try again');
     }
-    setState(() => _apps = true);
-    await Notifier.askPermission();
-    await widget.onCheckSms?.call();
   }
 
   Future<void> _setPayments(bool value) async {
@@ -253,15 +258,20 @@ class _AlertSettingsState extends State<_AlertSettings> {
       if (mounted) setState(() => _sms = false);
       return;
     }
-    final problem = await SmsInbox.enable();
-    if (!mounted) return;
-    if (problem != null) {
-      ProfileScreen._show(context, problem);
-      return;
+    try {
+      final problem = await SmsInbox.enable();
+      if (!mounted) return;
+      if (problem != null) {
+        ProfileScreen._show(context, problem);
+        return;
+      }
+      setState(() => _sms = true);
+      await Notifier.askPermission();
+      await widget.onCheckSms?.call();
+    } catch (_) {
+      if (!mounted) return;
+      ProfileScreen._show(context, 'Could not turn on bank SMS. Try again');
     }
-    setState(() => _sms = true);
-    await Notifier.askPermission();
-    await widget.onCheckSms?.call();
   }
 
   Future<void> _allow(String sender) async {

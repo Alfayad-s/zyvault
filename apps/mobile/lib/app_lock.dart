@@ -12,15 +12,20 @@ class AppLock extends ChangeNotifier {
   bool enabled = false;
   bool locked = false;
   bool _authenticating = false;
+  var _generation = 0;
   DateTime? _leftAt;
 
   Future<void> load() async {
+    final generation = _generation;
+    bool stored = false;
     try {
       final preferences = await SharedPreferences.getInstance();
-      enabled = preferences.getBool(_enabledKey) ?? false;
+      stored = preferences.getBool(_enabledKey) ?? false;
     } catch (_) {
-      enabled = false;
+      return;
     }
+    if (generation != _generation) return;
+    enabled = stored;
     locked = enabled;
     notifyListeners();
   }
@@ -51,13 +56,19 @@ class AppLock extends ChangeNotifier {
       final problem = await _authenticate('Turn on fingerprint unlock');
       if (problem != null) return problem;
     }
+    final generation = ++_generation;
     enabled = value;
     locked = false;
+    notifyListeners();
     try {
       final preferences = await SharedPreferences.getInstance();
       await preferences.setBool(_enabledKey, value);
-    } catch (_) {}
-    notifyListeners();
+    } catch (_) {
+      if (generation != _generation) return null;
+      enabled = !value;
+      notifyListeners();
+      return 'Could not save the unlock setting. Try again';
+    }
     return null;
   }
 

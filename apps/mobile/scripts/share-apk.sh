@@ -13,8 +13,12 @@ SHARE_DIR="$ROOT_DIR/share-apk"
 APK_NAME="finance-track-release.apk"
 BUILT_APK="$MOBILE_DIR/build/app/outputs/flutter-apk/app-release.apk"
 
+API_BASE_URL="${API_BASE_URL:-https://zyvault-production.up.railway.app}"
+API_BASE_URL="${API_BASE_URL%/}"
+
 cd "$MOBILE_DIR"
-flutter build apk
+echo "Building release APK for $API_BASE_URL"
+flutter build apk --release --dart-define=API_BASE_URL="$API_BASE_URL"
 
 if [[ ! -f "$BUILT_APK" ]]; then
   echo "APK not found at $BUILT_APK" >&2

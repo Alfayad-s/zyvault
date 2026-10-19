@@ -6,6 +6,7 @@
     "dev": "turbo dev --filter=api",
     "dev:mobile": "turbo dev --filter=mobile",
     "dev:mobile:device": "bash apps/mobile/scripts/run-device.sh",
+    "dev:website": "turbo dev --filter=website",
     "build": "turbo build",
     "build:apk": "pnpm --filter mobile build:share",
     "build:apk:fresh": "pnpm --filter mobile build:share:clean",

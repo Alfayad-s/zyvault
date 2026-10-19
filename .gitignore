@@ -2,9 +2,10 @@
 node_modules/
 .pnpm-store/
 
-# Turbo / Nest build output
+# Turbo / Nest / Next build output
 .turbo/
 dist/
+.next/
 coverage/
 *.tsbuildinfo
 

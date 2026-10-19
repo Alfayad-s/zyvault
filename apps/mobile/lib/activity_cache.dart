@@ -18,12 +18,16 @@ class ActivityCache {
     final key = _key(from, to);
     final cached = _memory[key];
     if (cached != null) return cached;
-    final preferences = await _store();
-    final raw = preferences.getString('$prefix$key');
-    if (raw == null) return null;
-    final items = _decode(raw);
-    _memory[key] = items;
-    return items;
+    try {
+      final preferences = await _store();
+      final raw = preferences.getString('$prefix$key');
+      if (raw == null) return null;
+      final items = _decode(raw);
+      _memory[key] = items;
+      return items;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> write(
@@ -33,19 +37,23 @@ class ActivityCache {
   ) async {
     final key = _key(from, to);
     _memory[key] = items;
-    final preferences = await _store();
-    await preferences.setString(
-      '$prefix$key',
-      jsonEncode(items.map((item) => item.toJson()).toList()),
-    );
+    try {
+      final preferences = await _store();
+      await preferences.setString(
+        '$prefix$key',
+        jsonEncode(items.map((item) => item.toJson()).toList()),
+      );
+    } catch (_) {}
   }
 
   static Future<void> clear() async {
-    final preferences = await SharedPreferences.getInstance();
-    final keys = preferences.getKeys().where((key) => key.startsWith(prefix));
-    for (final key in keys) {
-      await preferences.remove(key);
-    }
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final keys = preferences.getKeys().where((key) => key.startsWith(prefix));
+      for (final key in keys) {
+        await preferences.remove(key);
+      }
+    } catch (_) {}
   }
 
   Future<SharedPreferences> _store() async {
