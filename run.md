@@ -68,7 +68,7 @@ The code length (6 to 10 digits) and how long it stays valid come from Supabase:
 
 Swiping right on Home and typing a sentence such as `Spent 450 rupees on pizza last night` goes to `POST /transactions/parse`. Nest asks an LLM to read the amount, merchant, date, and category (from your categories table), and saves the transaction. Only when the LLM gives no usable category does it ask Hugging Face `facebook/bart-large-mnli`; if that is unavailable too, the spend goes to Other. The AI keys stay in `apps/api/.env`; the app only sends the text with the sign-in token.
 
-1. Get a free key from [Google AI Studio](https://aistudio.google.com/apikey) and, as automatic backups, from [Groq](https://console.groq.com/keys) and [OpenRouter](https://openrouter.ai/keys). Google free Flash-Lite allows about 500 requests a day; Groq about 100 messages a day per model (200K tokens/day, three models); OpenRouter free models 50 a day (1,000 after a one-time $10 credit purchase). A [Hugging Face token](https://huggingface.co/settings/tokens) is optional: free Hugging Face accounts have had no inference credit since 7 October 2026, so it only helps on PRO or with bought credits.
+1. Get a free key from [Google AI Studio](https://aistudio.google.com/apikey) and, as automatic backups, from [Groq](https://console.groq.com/keys) and [OpenRouter](https://openrouter.ai/keys). Google free Flash-Lite allows about 500 requests a day. Each Groq chat model allows 1,000 requests and 200,000 tokens a day; a short reply uses about 2,000 tokens, so the practical cap is about 80–120 turns, and that cap is shared by every user of the app. The spend parser uses `gpt-oss-120b` then `qwen3.8-27b`. The chatbot uses only `openai/gpt-oss-20b`, so the two do not share one model’s daily tokens. OpenRouter free models allow 50 a day (1,000 after a one-time $10 credit purchase). A [Hugging Face token](https://huggingface.co/settings/tokens) is optional: free Hugging Face accounts have had no inference credit since 7 October 2026, so it only helps on PRO or with bought credits.
 2. Add to `apps/api/.env`:
 
    ```bash
@@ -77,7 +77,7 @@ Swiping right on Home and typing a sentence such as `Spent 450 rupees on pizza l
    GROQ_API_KEY=...               # optional backup
    OPENROUTER_API_KEY=...         # optional backup
    GOOGLE_AI_MODEL=               # optional; default gemini-flash-lite-latest
-   GROQ_MODEL=                    # optional; default gpt-oss-120b, qwen3.8-27b, gpt-oss-20b
+   GROQ_MODEL=                    # optional parser override; default gpt-oss-120b, then qwen3.8-27b. Chat always uses gpt-oss-20b.
    OPENROUTER_MODEL=              # optional; default free Gemma 4, then Nemotron
    HF_TOKEN=...                   # optional
    ```
@@ -95,7 +95,7 @@ pnpm dev:mobile
 pnpm dev:mobile:device
 ```
 
-`pnpm dev:mobile:device` detects this computer's LAN IP and runs Flutter with that backend URL, for a physical phone. Pass a device id when more than one is connected:
+`pnpm dev:mobile:device` runs Flutter on a physical phone. An Android phone on USB uses `http://127.0.0.1:3000` through `adb reverse`, so it does not depend on Wi-Fi. Otherwise it uses this computer's LAN IP, and the phone must be on the same Wi-Fi. Pass a device id when more than one is connected:
 
 ```bash
 pnpm dev:mobile:device -- -d <device-id>
