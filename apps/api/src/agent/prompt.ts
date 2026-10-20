@@ -61,6 +61,27 @@ How to read the bill:
 5. Use "Other" or "Other income" only when nothing else fits.
 6. Never invent an amount. If no payable total is readable, reply [].`;
 
+export const receiptItemsInstruction = `You read the printed text of one bill for an Indian personal finance app.
+The message contains words read from a photo or PDF, plus an optional note from the user. There is no picture.
+
+Reply with only a JSON array. Each object has exactly these keys:
+- "amount": number in rupees for that line. "1,284.50" = 1284.50. Use the line total, not the MRP or the unit price, when both are printed.
+- "currency": "INR" unless another currency is clearly printed.
+- "merchant": the shop, biller, or person, written nicely, the same on every item from one bill, or null.
+- "date": YYYY-MM-DD from the bill. If the printed date is missing or in the future, use today from the message. Never a future date.
+- "rawDescription": 2 to 5 lower-case words naming that item, without amounts.
+- "kind": "income" only when the bill is money received (refund, cashback, salary credit). Otherwise "expense".
+- "category": exactly one name from the category lists in the message, copied as written.
+
+How to read the bill:
+1. When the text has item rows, return one object per item. Skip quantity, MRP, unit price, CGST, SGST, IGST, cess, round-off, change, "you saved", subtotal, and the grand total.
+2. When there are no item rows, such as a UPI screenshot or a bill that only shows a payable total, return one object for the amount payable after discount, including tax.
+3. When the user note gives their share, return only that share and ignore the item rows.
+4. ${categoryGuide}
+5. If the user's past choices contain a similar note, follow how they categorised it.
+6. Use "Other" or "Other income" only when nothing else fits.
+7. Never invent an amount. If nothing payable is readable, reply [].`;
+
 const examples: {
   message: string;
   today: string;
@@ -266,6 +287,8 @@ export function buildUserPrompt(input: {
   categories: CategoryNames;
   memory: MemoryItem[];
   receipt?: boolean;
+  items?: boolean;
+  printed?: string;
   accounts?: string[];
   goals?: string[];
 }): string {
@@ -276,10 +299,20 @@ export function buildUserPrompt(input: {
   if (input.accounts?.length) {
     lines.push(`Accounts: ${input.accounts.join('; ')}.`);
   }
-  if (input.goals?.length && !input.receipt) {
+  if (input.goals?.length && !input.receipt && !input.items) {
     lines.push(`Goals: ${input.goals.join('; ')}.`);
   }
-  if (input.receipt) {
+  if (input.items) {
+    lines.push(
+      '',
+      'The text below was read from one bill, receipt, UPI screenshot, or invoice.',
+      'Return one object per item row. Skip tax, round-off, MRP, and the grand total.',
+      'If there are no item rows, return one object for the amount payable.',
+      '',
+      'Printed text:',
+      input.printed?.trim() || '(nothing readable)',
+    );
+  } else if (input.receipt) {
     lines.push(
       '',
       'The attached file is one bill, receipt, UPI screenshot, or invoice.',
@@ -314,7 +347,7 @@ export function buildUserPrompt(input: {
       ...input.memory.map((item) => `- "${item.note}" -> ${item.categoryName} (${item.kind})`),
     );
   }
-  if (input.receipt) {
+  if (input.receipt || input.items) {
     lines.push('', `Today: ${withWeekday(input.today)}.`);
     if (input.sentence.trim()) {
       lines.push(`User note: ${input.sentence.trim()}`);

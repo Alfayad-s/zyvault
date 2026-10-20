@@ -11,7 +11,13 @@ import type { Goal } from '../goals/goals.js';
 import { GoalsService } from '../goals/goals.service.js';
 import { TransactionsService } from '../transactions/transactions.service.js';
 import { LlmClient, type BillImage } from './llm.client.js';
-import { buildUserPrompt, memoryFrom, receiptInstruction, systemInstruction } from './prompt.js';
+import {
+  buildUserPrompt,
+  memoryFrom,
+  receiptInstruction,
+  receiptItemsInstruction,
+  systemInstruction,
+} from './prompt.js';
 import {
   broaderCategory,
   categoryNameFor,
@@ -21,6 +27,7 @@ import {
   readLlmJson,
   type ParsedSpend,
 } from './spend.js';
+import { VisionClient } from './vision.client.js';
 import { ZeroShotClient } from './zero-shot.client.js';
 
 export type CategorySource = 'llm' | 'zero-shot' | 'fallback';
@@ -95,6 +102,7 @@ export class AIAgentService {
 
   constructor(
     private readonly llm: LlmClient,
+    private readonly vision: VisionClient,
     private readonly zeroShot: ZeroShotClient,
     private readonly categories: CategoriesService,
     private readonly transactions: TransactionsService,
@@ -128,20 +136,24 @@ export class AIAgentService {
       expense: categories.filter((item) => item.kind === 'expense').map((item) => item.name),
       income: categories.filter((item) => item.kind === 'income').map((item) => item.name),
     };
+    const printed = await this.billText(image);
+    const items = printed !== null;
     const prompt = buildUserPrompt({
       sentence: text,
       today,
       now,
       categories: names,
       memory: memoryFrom(history),
-      receipt: image !== undefined,
+      receipt: image !== undefined && !items,
+      items,
+      printed: printed ?? undefined,
       accounts: accounts.length > 1 ? accounts.map(accountLabel) : undefined,
       goals: goals.map((goal) => goal.name),
     });
     const reply = await this.llm.complete(
-      image ? receiptInstruction : systemInstruction,
+      items ? receiptItemsInstruction : image ? receiptInstruction : systemInstruction,
       prompt,
-      image,
+      items ? undefined : image,
     );
     let spends: ParsedSpend[];
     try {
@@ -162,6 +174,17 @@ export class AIAgentService {
         (image || accounts.length < 2 ? null : accountNearAmount(text, spend.amount, accounts));
       return { ...spend, accountId: account?.id ?? null, accountName: account?.name ?? null };
     });
+  }
+
+  private async billText(image?: BillImage): Promise<string | null> {
+    if (!image || !this.vision.configured()) return null;
+    try {
+      const text = await this.vision.read(image);
+      return text.trim() ? text : null;
+    } catch (caught) {
+      this.logger.warn(`Vision could not read the bill, using the photo instead: ${String(caught)}`);
+      return null;
+    }
   }
 
   private async categorize(

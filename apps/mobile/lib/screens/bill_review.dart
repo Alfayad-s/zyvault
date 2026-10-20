@@ -118,9 +118,11 @@ class _BillReviewState extends State<BillReview> {
                           ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'This is the amount payable. Change it if the read is wrong.',
-                    style: TextStyle(color: Color(0xFF8E8E93), height: 1.3),
+                  Text(
+                    _drafts.length > 1
+                        ? 'Each item is logged on its own, in its category. Change an amount if the read is wrong.'
+                        : 'This is the amount payable. Change it if the read is wrong.',
+                    style: const TextStyle(color: Color(0xFF8E8E93), height: 1.3),
                   ),
                   for (var index = 0; index < _drafts.length; index++) ...[
                     const SizedBox(height: 20),
@@ -139,7 +141,7 @@ class _BillReviewState extends State<BillReview> {
                       ),
                       decoration: InputDecoration(
                         prefixText: '₹ ',
-                        labelText: _drafts[index].merchant ?? 'Amount payable',
+                        labelText: _itemLabel(_drafts[index]),
                         border: const OutlineInputBorder(),
                       ),
                     ),
@@ -182,7 +184,9 @@ class _BillReviewState extends State<BillReview> {
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(formatDate(_drafts[index].occurredOn)),
-                      subtitle: Text(_drafts[index].note),
+                      subtitle: Text(
+                        _drafts[index].merchant ?? _drafts[index].note,
+                      ),
                       trailing: const Icon(Icons.calendar_today_outlined),
                       onTap: widget.saving ? null : () => _pickDate(index),
                     ),
@@ -235,6 +239,12 @@ class _BillReviewState extends State<BillReview> {
         .where((category) => category.kind == kind)
         .toList();
     return same.isEmpty ? widget.categories : same;
+  }
+
+  String _itemLabel(ParsedSpend draft) {
+    final note = draft.note.trim();
+    if (note.isNotEmpty) return note;
+    return draft.merchant ?? 'Amount payable';
   }
 
   String? _categoryValue(ParsedSpend draft) {

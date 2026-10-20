@@ -42,4 +42,18 @@ describe('buildUserPrompt', () => {
     expect(prompt).toContain('User note: my share was 400');
     expect(prompt).not.toContain('35k got salary');
   });
+
+  it('asks for one spend per printed item and includes the Vision text', () => {
+    const prompt = buildUserPrompt({
+      sentence: '',
+      today: '2026-10-18',
+      categories: { expense: ['Food', 'Groceries'], income: ['Salary'] },
+      memory: [],
+      items: true,
+      printed: 'Milk 40\nBread 30\nTotal 70',
+    });
+    expect(prompt).toContain('one object per item row');
+    expect(prompt).toContain('Milk 40');
+    expect(prompt).not.toContain('35k got salary');
+  });
 });

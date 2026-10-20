@@ -42,6 +42,7 @@ export class StatusService {
         'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1',
         { 'x-goog-api-key': this.config.get<string>('GOOGLE_AI_API_KEY') ?? '' },
       ),
+      this.visionKey(),
       this.pushAccount(),
       this.tables('Push tables', pushTables, 'device_tokens and push_log are there'),
     ]);
@@ -90,6 +91,13 @@ export class StatusService {
     } catch {
       return { name, ok: false, detail: 'Could not be reached' };
     }
+  }
+
+  private visionKey(): StatusCheck {
+    const key = this.config.get<string>('GOOGLE_CLOUD_VISION_API_KEY')?.trim();
+    return key
+      ? { name: 'Bill text', ok: true, detail: 'The Vision key is set' }
+      : { name: 'Bill text', ok: false, detail: 'Not configured' };
   }
 
   private pushAccount(): StatusCheck {

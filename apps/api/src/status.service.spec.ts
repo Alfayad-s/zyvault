@@ -28,6 +28,7 @@ describe('StatusService', () => {
     });
     expect(report.checks.find((check) => check.name === 'Sign-in')?.ok).toBe(true);
     expect(report.checks.find((check) => check.name === 'Chat')?.detail).toBe('Not configured');
+    expect(report.checks.find((check) => check.name === 'Bill text')?.detail).toBe('Not configured');
     expect(report.checks.find((check) => check.name === 'Server push')?.ok).toBe(false);
   });
 });

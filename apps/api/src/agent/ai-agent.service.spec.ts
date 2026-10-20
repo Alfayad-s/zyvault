@@ -11,6 +11,7 @@ import {
   matchAccount,
 } from './ai-agent.service.js';
 import { LlmClient } from './llm.client.js';
+import { VisionClient } from './vision.client.js';
 import { ZeroShotClient } from './zero-shot.client.js';
 
 const categories = [
@@ -36,6 +37,7 @@ function agent(env: Record<string, string>) {
   } as unknown as AccountsService;
   return new AIAgentService(
     new LlmClient(config),
+    new VisionClient(config),
     new ZeroShotClient(config),
     list,
     transactions,
@@ -271,6 +273,87 @@ describe('AIAgentService', () => {
     expect(body.contents[0]?.parts[0]?.inlineData).toEqual({ mimeType: 'image/jpeg', data: 'abc' });
     expect(body.contents[0]?.parts[1]?.text).toContain('amount payable');
     expect(body.contents[0]?.parts[1]?.text).toContain('User note: my share');
+  });
+
+  it('logs each bill item from Vision text and does not send the photo', async () => {
+    const fetch = vi.fn((url: string) =>
+      Promise.resolve(
+        url.includes('vision.googleapis.com')
+          ? reply({ responses: [{ fullTextAnnotation: { text: 'Milk 40\nBread 30\nTotal 70' } }] })
+          : gemini([
+              {
+                amount: 40,
+                merchant: 'Store',
+                date: '2026-10-18',
+                rawDescription: 'milk',
+                kind: 'expense',
+                category: 'Food',
+              },
+              {
+                amount: 30,
+                merchant: 'Store',
+                date: '2026-10-18',
+                rawDescription: 'bread',
+                kind: 'expense',
+                category: 'Food',
+              },
+            ]),
+      ),
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    const spends = await agent({ ...keys, GOOGLE_CLOUD_VISION_API_KEY: 'v' }).parse(
+      'user',
+      '',
+      '2026-10-18',
+      { mimeType: 'image/jpeg', data: 'abc' },
+    );
+
+    expect(spends.map((spend) => [spend.amount, spend.rawDescription])).toEqual([
+      [4000, 'milk'],
+      [3000, 'bread'],
+    ]);
+    expect(String(fetch.mock.calls[0]?.[0])).toContain('images:annotate');
+    const body = JSON.parse(fetch.mock.calls[1]?.[1]?.body as string) as {
+      systemInstruction: { parts: { text: string }[] };
+      contents: { parts: { text?: string; inlineData?: unknown }[] }[];
+    };
+    expect(body.contents[0]?.parts[0]?.inlineData).toBeUndefined();
+    expect(body.contents[0]?.parts[0]?.text).toContain('Milk 40');
+    expect(body.systemInstruction.parts[0]?.text).toContain('one object per item');
+  });
+
+  it('keeps the one-total photo read when Vision returns no words', async () => {
+    const fetch = vi.fn((url: string) =>
+      Promise.resolve(
+        url.includes('vision.googleapis.com')
+          ? reply({ responses: [{ fullTextAnnotation: { text: '   ' } }] })
+          : gemini([
+              {
+                amount: 70,
+                merchant: 'Store',
+                date: '2026-10-18',
+                rawDescription: 'grocery bill',
+                kind: 'expense',
+                category: 'Food',
+              },
+            ]),
+      ),
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    const [spend] = await agent({ ...keys, GOOGLE_CLOUD_VISION_API_KEY: 'v' }).parse(
+      'user',
+      '',
+      '2026-10-18',
+      { mimeType: 'image/jpeg', data: 'abc' },
+    );
+
+    expect(spend.amount).toBe(7000);
+    const body = JSON.parse(fetch.mock.calls[1]?.[1]?.body as string) as {
+      contents: { parts: { inlineData?: { data: string } }[] }[];
+    };
+    expect(body.contents[0]?.parts[0]?.inlineData?.data).toBe('abc');
   });
 
   it('turns a missing Gemini key or a Gemini outage into 503', async () => {
