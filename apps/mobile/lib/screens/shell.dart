@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:finance_track/api/finance_api.dart';
 import 'package:finance_track/app_lock.dart';
@@ -16,13 +17,14 @@ import 'package:finance_track/screens/transaction_form_screen.dart';
 import 'package:finance_track/screens/search_screen.dart';
 import 'package:finance_track/screens/transactions_screen.dart';
 import 'package:finance_track/screens/type_page.dart';
+import 'package:finance_track/sms/bank_sms.dart';
 import 'package:finance_track/sms/sms_inbox.dart';
 import 'package:finance_track/sms/sms_review_sheet.dart';
+import 'package:finance_track/person_profile.dart';
 import 'package:finance_track/widgets/finance_bottom_bar.dart';
+import 'package:finance_track/widgets/flower_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:notification_listener_service/notification_event.dart';
-import 'package:notification_listener_service/notification_listener_service.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({
@@ -46,7 +48,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   var _reviewingSms = false;
   var _foreground = true;
   Timer? _smsPoll;
-  StreamSubscription<ServiceNotificationEvent>? _upiAlerts;
+  StreamSubscription<BankSms>? _upiAlerts;
   StreamSubscription<Uri?>? _widgetClicks;
   Uri? _lastWidgetLink;
   DateTime? _lastWidgetAt;
@@ -61,6 +63,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     Notifier.markForeground(true);
     _widgetClicks = HomeScreenWidget.clicks.listen(_openFromWidget);
     HomeScreenWidget.launchedWith().then(_openFromWidget);
+    ProfilePhoto.load();
     ledger.refresh().then((_) async {
       await Push.start(widget.api);
       _syncReminders();
@@ -75,11 +78,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     final watchSms = await SmsInbox.enabled();
     final watchApps = await SmsInbox.appsEnabled();
     if (_upiAlerts == null && (watchSms || watchApps)) {
-      _upiAlerts = NotificationListenerService.notificationsStream.listen((
-        event,
-      ) async {
-        final alert = alertFromNotification(event);
-        if (alert == null) return;
+      _upiAlerts = SmsInbox.alerts.listen((alert) async {
         final added = await SmsInbox.storeAppAlert(alert);
         if (!added) return;
         if (_foreground) {
@@ -288,17 +287,23 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                 ),
               );
             },
-            icon: const Icon(LucideIcons.messageCircle),
+            icon: const FlowerAvatar(animate: false, size: 28),
           ),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: IconButton(
               tooltip: 'Profile',
               onPressed: _openProfile,
-              icon: const CircleAvatar(
-                radius: 16,
-                backgroundColor: Color(0xFF3A3A3C),
-                child: Icon(LucideIcons.user, size: 16, color: Colors.white),
+              icon: ValueListenableBuilder<String?>(
+                valueListenable: ProfilePhoto.current,
+                builder: (context, path, _) => CircleAvatar(
+                  radius: 16,
+                  backgroundColor: const Color(0xFFC8F57A),
+                  backgroundImage: path == null ? null : FileImage(File(path)),
+                  child: path == null
+                      ? const Icon(LucideIcons.user, size: 16, color: Color(0xFF17310C))
+                      : null,
+                ),
               ),
             ),
           ),

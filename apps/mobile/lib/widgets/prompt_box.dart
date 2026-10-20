@@ -1,10 +1,15 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_to_text.dart';
+
+typedef PromptSend = void Function(String text, {bool voice, int seconds});
 
 /// Dark prompt box used on the chat screen: a growing field, image preview,
 /// and a send button that becomes a mic when the field is empty.
@@ -12,7 +17,7 @@ class PromptBox extends StatefulWidget {
   const PromptBox({super.key, required this.loading, required this.onSend});
 
   final bool loading;
-  final ValueChanged<String> onSend;
+  final PromptSend onSend;
 
   @override
   State<PromptBox> createState() => _PromptBoxState();
@@ -23,8 +28,13 @@ class _PromptBoxState extends State<PromptBox> {
   final _focus = FocusNode();
   final _picker = ImagePicker();
   final _speech = SpeechToText();
-  var _mode = _PromptMode.none;
   var _listening = false;
+  var _closingVoice = false;
+  var _seconds = 0;
+  var _malayalam = false;
+  String? _voiceError;
+  DateTime? _started;
+  Timer? _clock;
   XFile? _image;
 
   bool get _hasText => _text.text.trim().isNotEmpty;
@@ -33,10 +43,26 @@ class _PromptBoxState extends State<PromptBox> {
   void initState() {
     super.initState();
     _text.addListener(() => setState(() {}));
+    _loadLanguage();
+  }
+
+  Future<void> _loadLanguage() async {
+    final saved = (await SharedPreferences.getInstance()).getString('voice_language');
+    if (!mounted || saved == null) return;
+    setState(() => _malayalam = saved == 'ml');
+  }
+
+  Future<void> _switchLanguage() async {
+    if (_listening) return;
+    final next = !_malayalam;
+    setState(() => _malayalam = next);
+    await (await SharedPreferences.getInstance()).setString('voice_language', next ? 'ml' : 'en');
   }
 
   @override
   void dispose() {
+    _clock?.cancel();
+    if (_listening) _speech.cancel();
     _text.dispose();
     _focus.dispose();
     super.dispose();
@@ -44,11 +70,14 @@ class _PromptBoxState extends State<PromptBox> {
 
   void _submit() {
     final text = _text.text.trim();
-    if (text.isEmpty || widget.loading) return;
+    if (text.isEmpty || widget.loading || _listening) return;
     HapticFeedback.lightImpact();
     widget.onSend(text);
     _text.clear();
-    setState(() => _image = null);
+    setState(() {
+      _image = null;
+      _voiceError = null;
+    });
   }
 
   Future<void> _pickImage() async {
@@ -59,36 +88,99 @@ class _PromptBoxState extends State<PromptBox> {
 
   Future<void> _toggleMic() async {
     if (_listening) {
-      await _speech.stop();
-      if (mounted) setState(() => _listening = false);
+      await _stopListening();
       return;
     }
-    final ready = await _speech.initialize();
-    if (!ready || !mounted) return;
-    setState(() => _listening = true);
+    FocusScope.of(context).unfocus();
+    final ready = await _speech.initialize(onError: _onSpeechError);
+    if (!mounted) return;
+    if (!ready) {
+      final allowed = await _speech.hasPermission;
+      if (!mounted) return;
+      setState(() {
+        _voiceError = allowed
+            ? 'Voice could not start on this phone'
+            : 'Allow the microphone: Settings › Apps › zyvault › Permissions › Microphone';
+      });
+      return;
+    }
+    _text.clear();
+    _clock?.cancel();
+    setState(() {
+      _listening = true;
+      _seconds = 0;
+      _started = DateTime.now();
+      _voiceError = null;
+    });
+    _clock = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || _started == null) return;
+      setState(() => _seconds = DateTime.now().difference(_started!).inSeconds);
+    });
+    final localeId = await _localeId();
+    if (!mounted || !_listening) return;
     await _speech.listen(
       onResult: (result) {
         _text.text = result.recognizedWords;
         _text.selection = TextSelection.collapsed(offset: _text.text.length);
-        if (result.finalResult && mounted) setState(() => _listening = false);
+        if (result.finalResult) _stopListening();
       },
       listenOptions: SpeechListenOptions(
         partialResults: true,
         listenMode: ListenMode.dictation,
-        pauseFor: const Duration(seconds: 3),
+        pauseFor: const Duration(seconds: 2),
         listenFor: const Duration(seconds: 30),
+        localeId: localeId,
       ),
     );
   }
 
+  Future<String> _localeId() async {
+    final wanted = _malayalam ? 'ml_in' : 'en_in';
+    final locales = await _speech.locales();
+    for (final locale in locales) {
+      if (locale.localeId.replaceAll('-', '_').toLowerCase() == wanted) {
+        return locale.localeId;
+      }
+    }
+    return _malayalam ? 'ml_IN' : 'en_IN';
+  }
+
+  Future<void> _stopListening() async {
+    if (_closingVoice) return;
+    _closingVoice = true;
+    _clock?.cancel();
+    try {
+      await _speech.stop();
+    } catch (_) {}
+    if (!mounted) return;
+    final missed = _text.text.trim().isEmpty;
+    setState(() {
+      _listening = false;
+      _started = null;
+      _voiceError = missed ? "Didn't catch that. Tap the mic and try again" : null;
+    });
+    _closingVoice = false;
+  }
+
+  void _onSpeechError(SpeechRecognitionError error) {
+    if (!mounted) return;
+    _clock?.cancel();
+    setState(() {
+      _listening = false;
+      _started = null;
+      _voiceError = error.errorMsg.contains('permission')
+          ? 'Allow the microphone: Settings › Apps › zyvault › Permissions › Microphone'
+          : error.errorMsg.contains('language')
+          ? 'Add Malayalam in the phone’s voice typing settings, then try again'
+          : "Didn't catch that. Tap the mic and try again";
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final hint = switch (_mode) {
-      _PromptMode.search => 'Search the web...',
-      _PromptMode.think => 'Think deeply...',
-      _PromptMode.canvas => 'Create on canvas...',
-      _PromptMode.none => 'Ask about your money',
-    };
+    final hint = _listening
+        ? 'Listening · 0:${_seconds.toString().padLeft(2, '0')}'
+        : 'Ask about your money';
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF1F2023),
@@ -156,6 +248,11 @@ class _PromptBoxState extends State<PromptBox> {
               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             ),
           ),
+          if (_voiceError != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
+              child: Text(_voiceError!, style: const TextStyle(color: Color(0xFFFFB4AB), fontSize: 13)),
+            ),
           Row(
             children: [
               Expanded(
@@ -169,31 +266,13 @@ class _PromptBoxState extends State<PromptBox> {
                         icon: const Icon(LucideIcons.paperclip, color: Color(0xFF9CA3AF), size: 20),
                       ),
                       _ModeChip(
-                        icon: LucideIcons.globe,
-                        label: 'Search',
-                        color: const Color(0xFF1EAEDB),
-                        selected: _mode == _PromptMode.search,
-                        onTap: () => setState(
-                          () => _mode = _mode == _PromptMode.search ? _PromptMode.none : _PromptMode.search,
-                        ),
-                      ),
-                      _ModeChip(
-                        icon: LucideIcons.brain,
-                        label: 'Think',
-                        color: const Color(0xFF8B5CF6),
-                        selected: _mode == _PromptMode.think,
-                        onTap: () => setState(
-                          () => _mode = _mode == _PromptMode.think ? _PromptMode.none : _PromptMode.think,
-                        ),
-                      ),
-                      _ModeChip(
-                        icon: LucideIcons.folderCode,
-                        label: 'Canvas',
-                        color: const Color(0xFFF97316),
-                        selected: _mode == _PromptMode.canvas,
-                        onTap: () => setState(
-                          () => _mode = _mode == _PromptMode.canvas ? _PromptMode.none : _PromptMode.canvas,
-                        ),
+                        icon: LucideIcons.languages,
+                        label: _malayalam ? 'മലയാളം' : 'English',
+                        color: const Color(0xFFC8F57A),
+                        selected: true,
+                        onTap: () {
+                          if (!_listening) _switchLanguage();
+                        },
                       ),
                     ],
                   ),
@@ -216,8 +295,6 @@ class _PromptBoxState extends State<PromptBox> {
     );
   }
 }
-
-enum _PromptMode { none, search, think, canvas }
 
 class _ModeChip extends StatelessWidget {
   const _ModeChip({

@@ -1,15 +1,22 @@
+import 'dart:io';
+
 import 'package:finance_track/app_lock.dart';
 import 'package:finance_track/ledger.dart';
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:finance_track/models.dart';
 import 'package:finance_track/notifications.dart';
+import 'package:finance_track/person_profile.dart';
+import 'package:finance_track/screens/person_edit_screen.dart';
 import 'package:finance_track/push.dart';
 import 'package:finance_track/reminders.dart';
+import 'package:finance_track/reply_voice.dart';
 import 'package:finance_track/screens/categories_screen.dart';
 import 'package:finance_track/screens/review_sheet.dart';
+import 'package:finance_track/screens/server_status_screen.dart';
 import 'package:finance_track/sms/sms_inbox.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:path_provider/path_provider.dart';
 
 const _card = Color(0xFF2C2C2E);
 const _muted = Color(0xFF8E8E93);
@@ -34,62 +41,98 @@ class ProfileScreen extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
       children: [
-        Container(
-          decoration: BoxDecoration(
-            color: _card,
-            borderRadius: BorderRadius.circular(22),
-          ),
-          child: Column(
+        const _ProfileHeader(),
+        const SizedBox(height: 22),
+        if (lock != null) ...[
+          _SettingsSection(
+            title: 'Security',
             children: [
-              if (lock != null)
-                ListenableBuilder(
-                  listenable: lock,
-                  builder: (context, _) => SwitchListTile(
-                    value: lock.enabled,
-                    onChanged: (value) => _toggleLock(context, lock, value),
-                    secondary: const Icon(
-                      LucideIcons.fingerprint,
-                      color: Colors.white,
-                    ),
-                    title: const Text(
-                      'Unlock with fingerprint',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    subtitle: const Text(
-                      'Ask for fingerprint, face or phone PIN when the app opens',
-                      style: TextStyle(color: _muted, fontSize: 13),
-                    ),
-                    activeThumbColor: const Color(0xFF17310C),
-                    activeTrackColor: const Color(0xFFC8F57A),
+              ListenableBuilder(
+                listenable: lock,
+                builder: (context, _) => SwitchListTile(
+                  value: lock.enabled,
+                  onChanged: (value) => _toggleLock(context, lock, value),
+                  secondary: const Icon(
+                    LucideIcons.fingerprint,
+                    color: Colors.white,
                   ),
-                ),
-              if (lock != null)
-                const Divider(height: 1, color: Color(0xFF3A3A3C)),
-              const _ReviewSwitch(),
-              const Divider(height: 1, color: Color(0xFF3A3A3C)),
-              ListTile(
-                leading: const Icon(LucideIcons.tags, color: Colors.white),
-                title: const Text(
-                  'Categories',
-                  style: TextStyle(color: Colors.white),
-                ),
-                subtitle: const Text(
-                  'Add your own with a 3D icon',
-                  style: TextStyle(color: _muted, fontSize: 13),
-                ),
-                trailing: const Icon(LucideIcons.chevronRight, color: _muted),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => CategoriesScreen(ledger: ledger),
+                  title: const Text(
+                    'Unlock with fingerprint',
+                    style: TextStyle(color: Colors.white),
                   ),
+                  subtitle: const Text(
+                    'Ask for fingerprint, face or phone PIN when the app opens',
+                    style: TextStyle(color: _muted, fontSize: 13),
+                  ),
+                  activeThumbColor: const Color(0xFF17310C),
+                  activeTrackColor: const Color(0xFFC8F57A),
                 ),
               ),
-              const Divider(height: 1, color: Color(0xFF3A3A3C)),
-              _AlertSettings(ledger: ledger, onCheckSms: onCheckSms),
             ],
           ),
+          const SizedBox(height: 22),
+        ],
+        _SettingsSection(
+          title: 'Money',
+          children: [
+            const _ReviewSwitch(),
+            ListTile(
+              leading: const Icon(LucideIcons.tags, color: Colors.white),
+              title: const Text(
+                'Categories',
+                style: TextStyle(color: Colors.white),
+              ),
+              subtitle: const Text(
+                'Add your own with a 3D icon',
+                style: TextStyle(color: _muted, fontSize: 13),
+              ),
+              trailing: const Icon(LucideIcons.chevronRight, color: _muted),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => CategoriesScreen(ledger: ledger),
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 22),
+        _SettingsSection(
+          title: 'Voice',
+          children: [
+            ListTile(
+              leading: const Icon(LucideIcons.languages, color: Colors.white),
+              title: const Text(
+                'Install Malayalam speech',
+                style: TextStyle(color: Colors.white),
+              ),
+              subtitle: const Text(
+                'Opens Google’s voice download so Read can speak Malayalam',
+                style: TextStyle(color: _muted, fontSize: 13),
+              ),
+              trailing: const Icon(LucideIcons.chevronRight, color: _muted),
+              onTap: () async {
+                final problem = await ReplyVoice.openMalayalamInstall();
+                if (problem != null && context.mounted) {
+                  _show(context, problem);
+                }
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 22),
+        _AlertSettings(ledger: ledger, onCheckSms: onCheckSms),
+        const SizedBox(height: 8),
+        Center(
+          child: TextButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => ServerStatusScreen(api: ledger.api),
+              ),
+            ),
+            child: const Text('Server details', style: TextStyle(color: Color(0xFFC8F57A))),
+          ),
+        ),
+        const SizedBox(height: 8),
         SizedBox(
           height: 54,
           child: OutlinedButton.icon(
@@ -122,6 +165,187 @@ class ProfileScreen extends StatelessWidget {
   ) async {
     final problem = await lock.setEnabled(value);
     if (problem != null && context.mounted) _show(context, problem);
+  }
+}
+
+class _SettingsSection extends StatelessWidget {
+  const _SettingsSection({required this.title, required this.children});
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Widget>[];
+    for (var index = 0; index < children.length; index++) {
+      if (index > 0) {
+        rows.add(const Divider(height: 1, color: Color(0xFF3A3A3C)));
+      }
+      rows.add(children[index]);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          child: Text(
+            title,
+            style: const TextStyle(
+              color: _muted,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.4,
+            ),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: _card,
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: Column(children: rows),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileHeader extends StatefulWidget {
+  const _ProfileHeader();
+
+  @override
+  State<_ProfileHeader> createState() => _ProfileHeaderState();
+}
+
+class _ProfileHeaderState extends State<_ProfileHeader> {
+  @override
+  void initState() {
+    super.initState();
+    PersonProfile.load();
+    ProfilePhoto.load();
+  }
+
+  Future<void> _choose() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: const Color(0xFF1C1C1E),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(LucideIcons.camera, color: Colors.white),
+              title: const Text('Take a photo', style: TextStyle(color: Colors.white)),
+              onTap: () => Navigator.pop(context, 'camera'),
+            ),
+            ListTile(
+              leading: const Icon(LucideIcons.image, color: Colors.white),
+              title: const Text('Choose a photo', style: TextStyle(color: Colors.white)),
+              onTap: () => Navigator.pop(context, 'gallery'),
+            ),
+            if (ProfilePhoto.current.value != null)
+              ListTile(
+                leading: const Icon(LucideIcons.trash2, color: Color(0xFFFF6B6B)),
+                title: const Text('Remove photo', style: TextStyle(color: Color(0xFFFF6B6B))),
+                onTap: () => Navigator.pop(context, 'remove'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    if (choice == 'remove') {
+      await ProfilePhoto.clear();
+      return;
+    }
+    try {
+      final shot = await ImagePicker().pickImage(
+        source: choice == 'camera' ? ImageSource.camera : ImageSource.gallery,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 80,
+      );
+      if (shot == null || !mounted) return;
+      final folder = await getApplicationDocumentsDirectory();
+      final saved = File('${folder.path}/profile-photo.jpg');
+      await File(shot.path).copy(saved.path);
+      await FileImage(saved).evict();
+      await ProfilePhoto.remember(saved.path);
+    } catch (error) {
+      debugPrint('Profile photo: $error');
+      if (mounted) ProfileScreen._show(context, 'Could not save that photo. Try again');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<String?>(
+      valueListenable: ProfilePhoto.current,
+      builder: (context, path, _) => ValueListenableBuilder<PersonProfile>(
+      valueListenable: PersonProfile.current,
+      builder: (context, person, _) {
+        final started = person.startedOn;
+        return Column(
+      children: [
+        GestureDetector(
+          onTap: _choose,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              CircleAvatar(
+                radius: 48,
+                backgroundColor: const Color(0xFFC8F57A),
+                backgroundImage: path == null ? null : FileImage(File(path)),
+                child: path == null
+                    ? const Icon(LucideIcons.user, size: 36, color: Color(0xFF17310C))
+                    : null,
+              ),
+              Positioned(
+                right: -2,
+                bottom: -2,
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF17310C),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFF161616), width: 2),
+                  ),
+                  child: const Icon(LucideIcons.camera, size: 14, color: Color(0xFFC8F57A)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              person.name.isEmpty ? 'Your name' : person.name,
+              style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
+            ),
+            IconButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => PersonEditScreen(profile: person)),
+              ),
+              icon: const Icon(LucideIcons.pencil, size: 18, color: Color(0xFFC8F57A)),
+            ),
+          ],
+        ),
+        if (person.age != null || started != null)
+          Text(
+            [
+              if (person.age != null) '${person.age} years',
+              if (started != null) 'since ${started.split('-').reversed.join('-')}',
+            ].join(' | '),
+            style: const TextStyle(color: _muted, fontSize: 15),
+          ),
+      ],
+        );
+      },
+      ),
+    );
   }
 }
 
@@ -297,6 +521,9 @@ class _AlertSettingsState extends State<_AlertSettings> {
     const subtitle = TextStyle(color: _muted, fontSize: 13);
     return Column(
       children: [
+        _SettingsSection(
+      title: 'Alerts',
+      children: [
         SwitchListTile(
           value: _reminders,
           onChanged: _setReminders,
@@ -322,7 +549,6 @@ class _AlertSettingsState extends State<_AlertSettings> {
             style: subtitle,
           ),
         ),
-        const Divider(height: 1, color: Color(0xFF3A3A3C)),
         SwitchListTile(
           value: _budgets,
           onChanged: _setBudgets,
@@ -335,8 +561,7 @@ class _AlertSettingsState extends State<_AlertSettings> {
           activeThumbColor: const Color(0xFF17310C),
           activeTrackColor: const Color(0xFFC8F57A),
         ),
-        if (SmsInbox.supported) ...[
-          const Divider(height: 1, color: Color(0xFF3A3A3C)),
+        if (SmsInbox.supported)
           SwitchListTile(
             value: _payments,
             onChanged: _setPayments,
@@ -349,9 +574,7 @@ class _AlertSettingsState extends State<_AlertSettings> {
             activeThumbColor: const Color(0xFF17310C),
             activeTrackColor: const Color(0xFFC8F57A),
           ),
-        ],
         if (SmsInbox.supported) ...[
-          const Divider(height: 1, color: Color(0xFF3A3A3C)),
           SwitchListTile(
             value: _sms,
             onChanged: _setSms,
@@ -367,7 +590,6 @@ class _AlertSettingsState extends State<_AlertSettings> {
             activeThumbColor: const Color(0xFF17310C),
             activeTrackColor: const Color(0xFFC8F57A),
           ),
-          const Divider(height: 1, color: Color(0xFF3A3A3C)),
           SwitchListTile(
             value: _apps,
             onChanged: _setApps,
@@ -380,21 +602,39 @@ class _AlertSettingsState extends State<_AlertSettings> {
             activeThumbColor: const Color(0xFF17310C),
             activeTrackColor: const Color(0xFFC8F57A),
           ),
-          for (final sender in _spam)
-            ListTile(
-              dense: true,
-              leading: const Icon(
-                LucideIcons.shieldAlert,
-                color: Color(0xFFFF6B6B),
-                size: 20,
-              ),
-              title: Text('Spam: $sender', style: title),
-              trailing: TextButton(
-                onPressed: () => _allow(sender),
-                child: const Text('Allow'),
-              ),
-            ),
         ],
+      ],
+    ),
+        const SizedBox(height: 22),
+        _SettingsSection(
+          title: 'Spam',
+          children: _spam.isEmpty
+              ? const [
+                  ListTile(
+                    leading: Icon(LucideIcons.shield, color: Colors.white),
+                    title: Text('No spam senders', style: TextStyle(color: Colors.white)),
+                    subtitle: Text(
+                      'A sender you mark as spam on a payment alert is listed here',
+                      style: TextStyle(color: _muted, fontSize: 13),
+                    ),
+                  ),
+                ]
+              : [
+                  for (final sender in _spam)
+                    ListTile(
+                      leading: const Icon(LucideIcons.shieldAlert, color: Color(0xFFFF6B6B)),
+                      title: Text(sender, style: title),
+                      subtitle: const Text(
+                        'Payment alerts from this sender are skipped',
+                        style: subtitle,
+                      ),
+                      trailing: TextButton(
+                        onPressed: () => _allow(sender),
+                        child: const Text('Allow'),
+                      ),
+                    ),
+                ],
+        ),
       ],
     );
   }

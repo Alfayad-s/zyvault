@@ -18,6 +18,7 @@ export type ActionContext = {
   categories: NamedKind[];
   goals: Named[];
   transactionIds: string[];
+  language?: 'ml' | 'en';
 };
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -46,7 +47,13 @@ export function resolveAction(
 ): { proposal: ChatProposal | null; problem?: string } {
   if (raw == null) return { proposal: null };
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { proposal: null, problem: 'I could not read that as something to save.' };
+    return {
+      proposal: null,
+      problem:
+        context.language === 'ml'
+          ? 'ഇത് സേവ് ചെയ്യാനുള്ളതായി വായിക്കാൻ കഴിഞ്ഞില്ല.'
+          : 'I could not read that as something to save.',
+    };
   }
   const action = raw as Record<string, unknown>;
   switch (action.type) {
@@ -83,10 +90,10 @@ function logProposal(action: Record<string, unknown>, context: ActionContext) {
   const category = matchKind(text(action.category), context.categories, kind);
   const account = matchAccount(text(action.account), context.accounts);
   const id = text(action.id);
-  if (!kind || !amount || !occurredOn) return incomplete('an amount and whether it is income or spending');
-  if (!category) return incomplete(`a category you already have for ${kind}`);
-  if (!account) return incomplete('which account');
-  if (id && !context.transactionIds.includes(id)) return incomplete('which saved payment to change');
+  if (!kind || !amount || !occurredOn) return incomplete('an amount and whether it is income or spending', context);
+  if (!category) return incomplete(`a category you already have for ${kind}`, context);
+  if (!account) return incomplete('which account', context);
+  if (id && !context.transactionIds.includes(id)) return incomplete('which saved payment to change', context);
   const note = clip(text(action.note), 200);
   const lines = [
     `${kind === 'income' ? 'Income' : 'Expense'} ${rupee(amount)}`,
@@ -122,10 +129,10 @@ function scheduleProposal(action: Record<string, unknown>, context: ActionContex
   const account = matchAccount(text(action.account), context.accounts);
   const atTime = clock.test(text(action.time) ?? '') ? text(action.time) : undefined;
   if (!kind || !amount || !repeat || !dayOfMonth || dayOfMonth < 1 || dayOfMonth > 31) {
-    return incomplete('the amount, how often, and which day');
+    return incomplete('the amount, how often, and which day', context);
   }
-  if (!category) return incomplete(`a category you already have for ${kind}`);
-  if (!account) return incomplete('which account');
+  if (!category) return incomplete(`a category you already have for ${kind}`, context);
+  if (!account) return incomplete('which account', context);
   const nextOn = futureDate(text(action.date), context.today, dayOfMonth);
   const note = clip(text(action.note), 200);
   const lines = [
@@ -155,8 +162,8 @@ function budgetProposal(action: Record<string, unknown>, context: ActionContext)
   const amount = paise(action.amount);
   const category = matchKind(text(action.category), context.categories, 'expense');
   const budgetMonth = month.test(text(action.month) ?? '') ? text(action.month) : context.today.slice(0, 7);
-  if (!amount) return incomplete('the budget amount');
-  if (!category || !budgetMonth) return incomplete('an expense category you already have');
+  if (!amount) return incomplete('the budget amount', context);
+  if (!category || !budgetMonth) return incomplete('an expense category you already have', context);
   return proposal('Set this budget?', [`${category.name} ${rupee(amount)}`, budgetMonth], {
     type: 'budget',
     categoryId: category.id,
@@ -173,8 +180,8 @@ function goalProposal(action: Record<string, unknown>, context: ActionContext) {
     ? (text(action.icon) as string)
     : 'goal-target';
   const targetDate = day.test(text(action.date) ?? '') ? text(action.date) : undefined;
-  if (!name || !target) return incomplete('a name and a target amount');
-  if (id && !context.goals.some((goal) => goal.id === id)) return incomplete('which goal to change');
+  if (!name || !target) return incomplete('a name and a target amount', context);
+  if (id && !context.goals.some((goal) => goal.id === id)) return incomplete('which goal to change', context);
   const lines = [name, `Target ${rupee(target)}`];
   if (targetDate) lines.push(targetDate);
   return proposal(id ? 'Update this goal?' : 'Create this goal?', lines, {
@@ -192,8 +199,8 @@ function goalMoneyProposal(action: Record<string, unknown>, context: ActionConte
   const amount = paise(action.amount);
   const goal = matchName(text(action.name), context.goals);
   const occurredOn = dateOr(action.date, context.today);
-  if (!entry || !amount || !occurredOn) return incomplete('the goal, the amount, and add or take out');
-  if (!goal) return incomplete('a goal you already have');
+  if (!entry || !amount || !occurredOn) return incomplete('the goal, the amount, and add or take out', context);
+  if (!goal) return incomplete('a goal you already have', context);
   const note = clip(text(action.note), 200);
   return proposal(entry === 'add' ? 'Add to this goal?' : 'Take out of this goal?', [goal.name, rupee(amount), occurredOn], {
     type: 'goal_money',
@@ -211,8 +218,8 @@ function debtProposal(action: Record<string, unknown>, context: ActionContext) {
   const amount = paise(action.amount);
   const occurredOn = dateOr(action.date, context.today);
   const account = text(action.account) ? matchAccount(text(action.account), context.accounts) : context.accounts[0];
-  if (!debtType || !person || !amount || !occurredOn) return incomplete('who, the amount, and lend, borrow, or a repayment');
-  if (text(action.account) && !account) return incomplete('which account');
+  if (!debtType || !person || !amount || !occurredOn) return incomplete('who, the amount, and lend, borrow, or a repayment', context);
+  if (text(action.account) && !account) return incomplete('which account', context);
   const note = clip(text(action.note), 200);
   const lines = [`${labelDebt(debtType)} ${person}`, rupee(amount), occurredOn];
   if (account) lines.push(account.name);
@@ -232,8 +239,31 @@ function proposal(title: string, lines: string[], action: Record<string, unknown
   return { proposal: { title, lines, action } };
 }
 
-function incomplete(what: string) {
-  return { proposal: null, problem: `I still need ${what} before you can accept it.` };
+function incomplete(what: string, context: ActionContext) {
+  return { proposal: null, problem: missingDetail(what, context.language) };
+}
+
+function missingDetail(what: string, language: ActionContext['language']): string {
+  if (language !== 'ml') return `I still need ${what} before you can accept it.`;
+  const malayalam: Record<string, string> = {
+    'an amount and whether it is income or spending':
+      'തുകയും അത് വരവാണോ ചെലവാണോ എന്നും വേണം. അതിന് ശേഷം മാത്രമേ സ്വീകരിക്കാനാകൂ.',
+    'a category you already have for income': 'നിങ്ങളുടെ ഒരു വരവ് വിഭാഗം വേണം. അതിന് ശേഷം മാത്രമേ സ്വീകരിക്കാനാകൂ.',
+    'a category you already have for expense': 'നിങ്ങളുടെ ഒരു ചെലവ് വിഭാഗം വേണം. അതിന് ശേഷം മാത്രമേ സ്വീകരിക്കാനാകൂ.',
+    'which account': 'ഏത് അക്കൗണ്ട് എന്ന് വേണം. അതിന് ശേഷം മാത്രമേ സ്വീകരിക്കാനാകൂ.',
+    'which saved payment to change': 'ഏത് സേവ് ചെയ്ത പേയ്‌മെന്റ് മാറ്റണം എന്ന് വേണം. അതിന് ശേഷം മാത്രമേ സ്വീകരിക്കാനാകൂ.',
+    'the amount, how often, and which day': 'തുക, എത്ര തവണ, ഏത് ദിവസം എന്നിവ വേണം. അതിന് ശേഷം മാത്രമേ സ്വീകരിക്കാനാകൂ.',
+    'the budget amount': 'ബജറ്റ് തുക വേണം. അതിന് ശേഷം മാത്രമേ സ്വീകരിക്കാനാകൂ.',
+    'an expense category you already have': 'നിങ്ങളുടെ ഒരു ചെലവ് വിഭാഗം വേണം. അതിന് ശേഷം മാത്രമേ സ്വീകരിക്കാനാകൂ.',
+    'a name and a target amount': 'പേരും ലക്ഷ്യ തുകയും വേണം. അതിന് ശേഷം മാത്രമേ സ്വീകരിക്കാനാകൂ.',
+    'which goal to change': 'ഏത് ലക്ഷ്യം മാറ്റണം എന്ന് വേണം. അതിന് ശേഷം മാത്രമേ സ്വീകരിക്കാനാകൂ.',
+    'the goal, the amount, and add or take out':
+      'ലക്ഷ്യം, തുക, ചേർക്കുകയോ എടുക്കുകയോ എന്നിവ വേണം. അതിന് ശേഷം മാത്രമേ സ്വീകരിക്കാനാകൂ.',
+    'a goal you already have': 'നിങ്ങളുടെ ഒരു ലക്ഷ്യം വേണം. അതിന് ശേഷം മാത്രമേ സ്വീകരിക്കാനാകൂ.',
+    'who, the amount, and lend, borrow, or a repayment':
+      'ആര്, തുക, കടം കൊടുത്തതോ വാങ്ങിയതോ തിരിച്ചടവോ എന്നിവ വേണം. അതിന് ശേഷം മാത്രമേ സ്വീകരിക്കാനാകൂ.',
+  };
+  return malayalam[what] ?? 'ഇത് സ്വീകരിക്കാൻ കുറച്ച് വിവരങ്ങൾ കൂടി വേണം.';
 }
 
 function matchAccount(wanted: string | undefined, accounts: Named[]): Named | null {

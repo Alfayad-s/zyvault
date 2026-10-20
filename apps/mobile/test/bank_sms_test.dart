@@ -158,6 +158,18 @@ void main() {
       [paid.amount, paid.kind, paid.merchant],
       [45000, 'expense', 'Swiggy'],
     );
+    final split = app(
+      'com.google.android.apps.nbu.paisa.user',
+      '₹450 paid',
+      'to Swiggy via UPI',
+    )!;
+    expect([split.amount, split.merchant], [45000, 'Swiggy']);
+    final named = app(
+      'com.phonepe.app',
+      'You paid Swiggy ₹450',
+      'Payment successful',
+    )!;
+    expect([named.amount, named.merchant], [45000, 'Swiggy']);
     expect(
       app(
         'com.google.android.apps.nbu.paisa.user',
@@ -175,6 +187,31 @@ void main() {
       isNull,
     );
     expect(app('com.whatsapp', 'Ravi paid you ₹500', ''), isNull);
+  });
+
+  test('reads a bank notification even when the picture flag is missing', () {
+    final sms = paymentFromNotification(
+      packageName: 'com.sbi.lotusintouch',
+      title: 'SBI',
+      content:
+          'Dear UPI user A/C X5678 debited by 250.0 on date 18Oct26 trf to zomato@hdfcbank Refno 123456789012. Avl Bal Rs.12,345.67 -SBI',
+      date: DateTime(2026, 10, 18, 14),
+    )!;
+    expect([sms.amount, sms.kind, sms.bankId, sms.merchant], [
+      25000,
+      'expense',
+      'sbi',
+      'Zomato',
+    ]);
+    expect(
+      paymentFromNotification(
+        packageName: 'com.whatsapp',
+        title: 'Anu',
+        content: 'Sent Rs.200 to you',
+        date: DateTime(2026, 10, 18),
+      ),
+      isNull,
+    );
   });
 
   test('merges an SMS and a UPI notification for the same payment', () {

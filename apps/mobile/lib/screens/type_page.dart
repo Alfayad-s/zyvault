@@ -11,8 +11,11 @@ import 'package:finance_track/money.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:finance_track/screens/bill_review.dart';
 import 'package:finance_track/screens/budgets_section.dart';
+import 'package:finance_track/screens/people_section.dart';
 import 'package:finance_track/screens/review_sheet.dart';
 import 'package:finance_track/widgets/account_chip.dart';
+import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
+import 'package:flutter_native_contact_picker/model/contact.dart';
 import 'package:finance_track/widgets/thinking_orb.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
@@ -798,6 +801,7 @@ class _TypePageState extends State<TypePage>
   var _voiceLanguage = 'en';
   var _review = true;
   String? _accountId;
+  String? _payee;
 
   @override
   void initState() {
@@ -841,6 +845,34 @@ class _TypePageState extends State<TypePage>
     if (picked == null || !mounted) return;
     setState(() => _accountId = picked.id);
     await saveDefaultAccountId(picked.id);
+  }
+
+  Future<void> _paySomeone() async {
+    if (_saving) return;
+    final Contact? contact;
+    try {
+      contact = await FlutterNativeContactPicker().selectContact();
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not open contacts');
+      return;
+    }
+    if (!mounted || contact == null) return;
+    final name = contact.fullName?.trim() ?? '';
+    if (name.isEmpty) {
+      setState(() => _error = 'That contact has no name');
+      return;
+    }
+    setState(() {
+      _payee = name;
+      _error = null;
+    });
+    await showDebtSheet(
+      context,
+      ledger: widget.ledger,
+      person: name,
+      type: 'lent',
+      accountId: _account()?.id,
+    );
   }
 
   Future<void> _switchVoiceLanguage() async {
@@ -1618,6 +1650,19 @@ class _TypePageState extends State<TypePage>
                   ),
                 ),
               ),
+            if (!showing)
+              SafeArea(
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _PayChip(
+                      name: _payee,
+                      onTap: _saving ? null : _paySomeone,
+                    ),
+                  ),
+                ),
+              ),
             if (showing)
               AnimatedBuilder(
                 animation: _fill,
@@ -1631,6 +1676,92 @@ class _TypePageState extends State<TypePage>
           ],
         ),
       ),
+    );
+  }
+}
+
+class _PayChip extends StatelessWidget {
+  const _PayChip({required this.name, required this.onTap});
+
+  final String? name;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = name ?? 'Pay someone';
+    return Semantics(
+      button: true,
+      label: name == null
+          ? 'Pay someone, tap to choose a contact'
+          : 'Paying $name, tap to choose another contact',
+      child: Material(
+        color: const Color(0xFF1C1C1E),
+        shape: const StadiumBorder(side: BorderSide(color: Color(0xFF3A3A3C))),
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(6, 6, 12, 6),
+            child: ExcludeSemantics(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _PayAvatar(name: name),
+                  const SizedBox(width: 8),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 180),
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(
+                    LucideIcons.chevronDown,
+                    color: Color(0xFF8E8E93),
+                    size: 18,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PayAvatar extends StatelessWidget {
+  const _PayAvatar({required this.name});
+
+  final String? name;
+
+  @override
+  Widget build(BuildContext context) {
+    final trimmed = name?.trim() ?? '';
+    return Container(
+      width: 28,
+      height: 28,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        color: Color(0xFF2C2C2E),
+        shape: BoxShape.circle,
+      ),
+      child: trimmed.isEmpty
+          ? const Icon(LucideIcons.userRound, color: Colors.white, size: 16)
+          : Text(
+              trimmed[0].toUpperCase(),
+              style: const TextStyle(
+                color: Color(0xFFC8F57A),
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
     );
   }
 }

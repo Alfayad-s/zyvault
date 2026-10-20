@@ -118,6 +118,40 @@ Object? _tryJson(String body) {
   }
 }
 
+class ServerCheck {
+  const ServerCheck({required this.name, required this.ok, required this.detail});
+
+  final String name;
+  final bool ok;
+  final String detail;
+
+  factory ServerCheck.fromJson(Map<String, dynamic> json) => ServerCheck(
+    name: json['name'] as String? ?? '',
+    ok: json['ok'] == true,
+    detail: json['detail'] as String? ?? '',
+  );
+}
+
+class ServerReport {
+  const ServerReport({required this.ok, required this.checks});
+
+  final bool ok;
+  final List<ServerCheck> checks;
+
+  factory ServerReport.fromJson(Map<String, dynamic> json) {
+    final checks = json['checks'];
+    return ServerReport(
+      ok: json['status'] == 'ok',
+      checks: checks is List
+          ? [
+              for (final item in checks)
+                if (item is Map<String, dynamic>) ServerCheck.fromJson(item),
+            ]
+          : const [],
+    );
+  }
+}
+
 class ChatAnswer {
   const ChatAnswer({required this.reply, this.proposal});
 
@@ -140,6 +174,11 @@ class FinanceApi {
   final Future<String?> Function()? onTokenRejected;
   final http.Client _client;
   final String baseUrl;
+
+  Future<ServerReport> serverStatus() async {
+    final body = await _send('GET', '/health/details', timeout: const Duration(seconds: 20));
+    return ServerReport.fromJson(body as Map<String, dynamic>);
+  }
 
   Future<Summary> summary(String month) async {
     final body = await _send('GET', '/summary?month=$month');

@@ -13,6 +13,7 @@ import { ChatModule } from './chat/chat.module.js';
 import { DebtsModule } from './debts/debts.module.js';
 import { GoalsModule } from './goals/goals.module.js';
 import { HealthController } from './health.controller.js';
+import { StatusService } from './status.service.js';
 import { PushModule } from './push/push.module.js';
 import { SchedulesModule } from './schedules/schedules.module.js';
 import { SummaryModule } from './summary/summary.module.js';
@@ -39,6 +40,6 @@ import { TransactionsModule } from './transactions/transactions.module.js';
     PushModule,
   ],
   controllers: [AppController, HealthController],
-  providers: [AppService],
+  providers: [AppService, StatusService],
 })
 export class AppModule {}

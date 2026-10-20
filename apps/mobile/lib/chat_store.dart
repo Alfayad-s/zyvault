@@ -3,12 +3,21 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class StoredTurn {
-  const StoredTurn({required this.role, required this.content, this.proposal, this.review = 'open'});
+  const StoredTurn({
+    required this.role,
+    required this.content,
+    this.proposal,
+    this.review = 'open',
+    this.voice = false,
+    this.seconds = 0,
+  });
 
   final String role;
   final String content;
   final Map<String, dynamic>? proposal;
   final String review;
+  final bool voice;
+  final int seconds;
 }
 
 /// The chat thread lives on the phone. Older turns are packed into a short
@@ -31,6 +40,8 @@ class ChatStore {
               content: item['content'] as String,
               proposal: item['proposal'] is Map ? Map<String, dynamic>.from(item['proposal'] as Map) : null,
               review: item['review'] is String ? item['review'] as String : 'open',
+              voice: item['voice'] == true,
+              seconds: item['seconds'] is num ? (item['seconds'] as num).toInt() : 0,
             ),
       ];
     } catch (_) {
@@ -50,9 +61,17 @@ class ChatStore {
               'content': turn.content,
               'proposal': turn.proposal,
               'review': turn.review,
+              'voice': turn.voice,
+              'seconds': turn.seconds,
             },
         ]),
       );
+    } catch (_) {}
+  }
+
+  static Future<void> clear() async {
+    try {
+      await (await SharedPreferences.getInstance()).remove(_key);
     } catch (_) {}
   }
 }

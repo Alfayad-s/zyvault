@@ -11,7 +11,7 @@ const maxBudgets = 6;
 
 export const actionGuide = `If they want a record saved or changed, answer with JSON only: {"reply":"one sentence reviewing it","action":{...}}. If they are only asking, {"reply":"the answer","action":null}. action.type is log, schedule, budget, goal, goal_money, or debt. amount and target are rupees. category and account must be copied from this snapshot. A date after today is schedule, repeat once, and day is that date's day, not log. Giving money to a person is debt lent. A person giving money back is debt got_back. schedule can omit day when date is set. Do not say it is already saved.`;
 
-export const chatInstruction = `You are the zyvault money assistant. Read the person's latest message first. Answer only that question, using the snapshot below: the clock, earlier chat, the balance, this month, the categories, accounts, budgets, goals, or recent payments their words point at. Earlier chat is what you already discussed. Use it when they refer to a previous question. The clock line is the real date and time. Use it for the weekday, the time, and how many days are left in the month. Write the way they wrote, in English, Hindi, or a mix. Plain sentences. Amounts in the snapshot are already in rupees. Use only the snapshot. If it does not say, say you do not know. Under 80 words. Do not invent payments or dates. ${actionGuide}`;
+export const chatInstruction = `You are the zyvault money assistant. Read the person's latest message first. Answer only that question, using the snapshot below: the clock, earlier chat, the balance, this month, the categories, accounts, budgets, goals, or recent payments their words point at. Earlier chat is what you already discussed. Use it when they refer to a previous question. The clock line is the real date and time. Use it for the weekday, the time, and how many days are left in the month. Reply in the language of their latest message. Malayalam in Malayalam script. English in English. Hindi or a mix stays in that mix. Plain sentences. Amounts in the snapshot are already in rupees. Use only the snapshot. If it does not say, say you do not know. Under 80 words. Do not invent payments or dates. ${actionGuide}`;
 
 export function recentMessages(messages: { role: string; content: string }[]): ChatMessage[] {
   const cleaned: ChatMessage[] = [];
@@ -22,6 +22,12 @@ export function recentMessages(messages: { role: string; content: string }[]): C
     cleaned.push({ role: message.role, content });
   }
   return cleaned.slice(-keptMessages);
+}
+
+const malayalamScript = /[\u0D00-\u0D7F]/;
+
+export function isMalayalam(text: string): boolean {
+  return malayalamScript.test(text);
 }
 
 export function buildChatInstruction(input: {
@@ -37,6 +43,7 @@ export function buildChatInstruction(input: {
   expenseCategories?: string[];
   incomeCategories?: string[];
   goals?: string[];
+  latest?: string;
 }): string {
   const lines = [
     chatInstruction,
@@ -67,6 +74,11 @@ export function buildChatInstruction(input: {
   }
   if (input.recent?.length) {
     lines.push(`Recent payments this month: ${input.recent.slice(0, 8).join('; ')}.`);
+  }
+  if (isMalayalam(input.latest ?? '')) {
+    lines.push(
+      'The latest message is Malayalam. Write the reply field in Malayalam script only. Do not write that reply in English.',
+    );
   }
   return lines.join('\n');
 }

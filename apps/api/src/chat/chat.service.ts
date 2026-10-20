@@ -17,7 +17,7 @@ import type { Transaction } from '../transactions/transactions.service.js';
 import { TransactionsService } from '../transactions/transactions.service.js';
 import { isUuid, readChatTurn, resolveAction } from './chat-action.js';
 import { describeNow } from './chat-clock.js';
-import { buildChatInstruction, recentMessages } from './chat-prompt.js';
+import { buildChatInstruction, isMalayalam, recentMessages } from './chat-prompt.js';
 import type { ChatDto } from './dto/chat.dto.js';
 
 @Injectable()
@@ -48,6 +48,8 @@ export class ChatService {
       this.categories.list(userId).catch(() => []),
       this.goals.list(userId).catch(() => []),
     ]);
+    const latest = messages.at(-1)?.content ?? '';
+    const malayalam = isMalayalam(latest);
     const instruction = buildChatInstruction({
       clock: describeNow(body.today),
       balance: rupees(summary.balance),
@@ -61,16 +63,31 @@ export class ChatService {
       expenseCategories: categories.filter((category) => category.kind === 'expense').map((category) => category.name),
       incomeCategories: categories.filter((category) => category.kind === 'income').map((category) => category.name),
       goals: goals.map((goal) => `${goal.id} ${goal.name}`),
+      latest,
     });
-    const text = await this.llm.chat(instruction, messages);
-    const parsed = readChatTurn(text);
-    const resolved = resolveAction(parsed.action, {
+    const context = {
       today: body.today,
       accounts,
       categories,
       goals,
       transactionIds: recent.map((transaction) => transaction.id),
-    });
+      language: malayalam ? ('ml' as const) : ('en' as const),
+    };
+    let text = await this.llm.chat(instruction, messages);
+    let parsed = readChatTurn(text);
+    let resolved = resolveAction(parsed.action, context);
+    if (malayalam && !resolved.problem && !isMalayalam(parsed.reply)) {
+      const again = readChatTurn(
+        await this.llm.chat(
+          `${instruction}\n\nWrite the reply field again, in Malayalam script only.`,
+          messages,
+        ),
+      );
+      if (isMalayalam(again.reply)) {
+        parsed = again;
+        resolved = resolveAction(parsed.action, context);
+      }
+    }
     const reply = resolved.problem ?? parsed.reply;
     return { reply, proposal: resolved.proposal };
   }

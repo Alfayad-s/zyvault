@@ -38,6 +38,8 @@
 	<string>zyvault uses the camera to read a bill or receipt.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>zyvault reads a bill or receipt from your photos.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>zyvault opens your contacts so you can pick who you sent money to.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

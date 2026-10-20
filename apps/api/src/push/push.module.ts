@@ -11,6 +11,6 @@ import { PushService } from './push.service.js';
   imports: [SupabaseModule, AuthModule, SchedulesModule],
   controllers: [DevicesController],
   providers: [FcmClient, PushService, PushJobs],
-  exports: [PushService],
+  exports: [PushService, FcmClient],
 })
 export class PushModule {}

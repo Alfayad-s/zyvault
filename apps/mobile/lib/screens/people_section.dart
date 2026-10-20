@@ -485,6 +485,7 @@ Future<void> showDebtSheet(
   String? person,
   String? type,
   int? amount,
+  String? accountId,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -494,8 +495,13 @@ Future<void> showDebtSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
-    builder: (context) =>
-        DebtSheet(ledger: ledger, person: person, type: type, amount: amount),
+    builder: (context) => DebtSheet(
+      ledger: ledger,
+      person: person,
+      type: type,
+      amount: amount,
+      accountId: accountId,
+    ),
   );
 }
 
@@ -506,12 +512,14 @@ class DebtSheet extends StatefulWidget {
     this.person,
     this.type,
     this.amount,
+    this.accountId,
   });
 
   final Ledger ledger;
   final String? person;
   final String? type;
   final int? amount;
+  final String? accountId;
 
   @override
   State<DebtSheet> createState() => _DebtSheetState();
@@ -538,6 +546,11 @@ class _DebtSheetState extends State<DebtSheet> {
     super.initState();
     _person.addListener(() => setState(() {}));
     final accounts = widget.ledger.accounts;
+    final chosen = widget.accountId;
+    if (chosen != null && accounts.any((account) => account.id == chosen)) {
+      _accountId = chosen;
+      return;
+    }
     _accountId = accounts.isEmpty ? null : accounts.first.id;
     loadDefaultAccountId().then((id) {
       if (!mounted || id == null) return;

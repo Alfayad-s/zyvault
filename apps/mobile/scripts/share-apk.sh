@@ -13,8 +13,8 @@ SHARE_DIR="$ROOT_DIR/share-apk"
 APK_NAME="finance-track-release.apk"
 BUILT_APK="$MOBILE_DIR/build/app/outputs/flutter-apk/app-release.apk"
 
-API_BASE_URL="${API_BASE_URL:-https://zyvault-production.up.railway.app}"
-API_BASE_URL="${API_BASE_URL%/}"
+# Release APKs always call production. Ignore a local API_BASE_URL left in the shell.
+API_BASE_URL="https://zyvault-production.up.railway.app"
 
 cd "$MOBILE_DIR"
 echo "Building release APK for $API_BASE_URL"

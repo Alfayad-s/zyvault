@@ -115,6 +115,18 @@ final _appPatterns = <(RegExp, String)>[
   ),
   (
     RegExp(
+      r'(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?) (?:paid|sent)[.!]?\s+to (.+?)(?:[.!]|$| on | via | using )',
+    ),
+    'expense',
+  ),
+  (
+    RegExp(
+      r'(?:you )?paid (.+?)[.!]?\s*(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)',
+    ),
+    'expense',
+  ),
+  (
+    RegExp(
       r'(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?) (?:paid|sent) to (.+?)(?:[.!]|$| on | via | using )',
     ),
     'expense',
@@ -143,9 +155,11 @@ BankSms? parseUpiNotification({
   for (final (pattern, kind) in _appPatterns) {
     final match = pattern.firstMatch(text);
     if (match == null) continue;
-    final paidYou = pattern.pattern.startsWith('^(.+?) (?:has )?paid you');
-    final amountText = paidYou ? match.group(2)! : match.group(1)!;
-    final person = paidYou
+    final personFirst =
+        pattern.pattern.startsWith('^(.+?) (?:has )?paid you') ||
+        pattern.pattern.startsWith('(?:you )?paid (');
+    final amountText = personFirst ? match.group(2)! : match.group(1)!;
+    final person = personFirst
         ? match.group(1)
         : match.groupCount >= 2
         ? match.group(2)
@@ -311,13 +325,93 @@ String _senderCode(String sender) {
   return parts.first.replaceAll(RegExp(r'[^A-Z]'), '');
 }
 
+const _exactBanks = <String, String>{
+  'SBI': 'sbi',
+  'HDFC': 'hdfc',
+  'ICICI': 'icici',
+  'AXIS': 'axis',
+};
+
 String? bankFromSender(String sender) {
   final code = _senderCode(sender);
+  if (_exactBanks.containsKey(code)) return _exactBanks[code];
   if (_senderBanks.containsKey(code)) return _senderBanks[code];
   for (final entry in _senderBanks.entries) {
     if (code.contains(entry.key)) return entry.value;
   }
   return null;
+}
+
+const _smsApps = <String>{
+  'com.google.android.apps.messaging',
+  'com.android.mms',
+  'com.android.messaging',
+  'com.samsung.android.messaging',
+  'com.truecaller',
+};
+
+bool _mentionsBank(String text) {
+  final lower = text.toLowerCase();
+  return _bodyBanks.keys.any(lower.contains);
+}
+
+/// A bank SMS or UPI alert, read from a notification without requiring every
+/// platform flag to be present.
+BankSms? paymentFromNotification({
+  required String packageName,
+  required String title,
+  required String content,
+  required DateTime date,
+  bool removed = false,
+  bool ongoing = false,
+}) {
+  if (removed || ongoing) return null;
+  return parseUpiNotification(
+        packageName: packageName,
+        title: title,
+        content: content,
+        date: date,
+      ) ??
+      parseSmsNotification(
+        packageName: packageName,
+        title: title,
+        content: content,
+        date: date,
+      );
+}
+
+BankSms? parseSmsNotification({
+  required String packageName,
+  required String title,
+  required String content,
+  required DateTime date,
+}) {
+  final sender = title.trim();
+  final body = content.trim();
+  if (sender.isEmpty && body.isEmpty) return null;
+  final text = body.isEmpty ? sender : body;
+  final from = sender.isEmpty ? 'Bank' : sender;
+  final known =
+      _smsApps.contains(packageName) ||
+      bankFromSender(from) != null ||
+      _mentionsBank('$from $text');
+  if (!known) return null;
+  return parseBankSms(
+    id: smsKey(from, text, date),
+    sender: from,
+    body: text,
+    date: date,
+  );
+}
+
+String senderKey(String sender) {
+  final parts = sender.toUpperCase().trim().split('-')
+    ..sort((a, b) => b.length.compareTo(a.length));
+  return parts.first;
+}
+
+String smsKey(String sender, String body, DateTime date) {
+  return '${senderKey(sender)}|${date.millisecondsSinceEpoch}|${body.hashCode}';
 }
 
 BankSms? parseBankSms({

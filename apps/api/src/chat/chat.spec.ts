@@ -79,6 +79,20 @@ describe('buildChatInstruction', () => {
     expect(instruction).toContain('Food ₹4,000');
     expect(instruction.length).toBeLessThan(4_500);
   });
+
+  it('tells the model to answer a Malayalam message in Malayalam', () => {
+    const instruction = buildChatInstruction({
+      clock: 'Clock: Monday, 19 October 2026, 5:30 PM IST.',
+      balance: '₹1,000',
+      monthIncome: '₹0',
+      monthExpense: '₹0',
+      categories: [],
+      accounts: [],
+      budgets: [],
+      latest: 'എനിക്ക് നാളെ അഞ്ജലിക്ക് 100 രൂപ കൊടുക്കണം',
+    });
+    expect(instruction).toContain('Malayalam script only');
+  });
 });
 
 function reply(body: unknown, status = 200) {
@@ -115,6 +129,16 @@ describe('resolveAction', () => {
     expect(resolved.proposal?.action.dayOfMonth).toBe(21);
     expect(resolved.proposal?.action.nextOn).toBe('2026-10-21');
     expect(resolved.problem).toBeUndefined();
+  });
+
+  it('asks in Malayalam when the message was Malayalam and a detail is missing', () => {
+    const resolved = resolveAction(
+      { type: 'debt', person: '', amount: 100 },
+      { ...context, language: 'ml' },
+    );
+    expect(resolved.proposal).toBeNull();
+    expect(resolved.problem).toContain('തുക');
+    expect(resolved.problem).not.toContain('I still need');
   });
 
   it('asks for the missing account instead of saving', () => {

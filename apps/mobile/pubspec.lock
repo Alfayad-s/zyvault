@@ -414,6 +414,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.1.1"
+  flutter_native_contact_picker:
+    dependency: "direct main"
+    description:
+      name: flutter_native_contact_picker
+      sha256: d50fac91dfc45fc6bedeead035353dcb5a060d9c4daad0ae7b0d9b2876df038b
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.13"
   flutter_plugin_android_lifecycle:
     dependency: transitive
     description:
@@ -499,6 +507,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.1.1"
+  flutter_tts:
+    dependency: "direct main"
+    description:
+      name: flutter_tts
+      sha256: ce5eb209b40e95f2f4a1397116c87ab2fcdff32257d04ed7a764e75894c03775
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.2.5"
   flutter_web_plugins:
     dependency: transitive
     description: flutter
@@ -809,7 +825,7 @@ packages:
     source: hosted
     version: "1.1.0"
   path_provider:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: path_provider
       sha256: a7f4874f987173da295a61c181b8ee71dab59b332a486b391babf26a1b884825

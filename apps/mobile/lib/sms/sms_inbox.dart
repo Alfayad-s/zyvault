@@ -3,11 +3,14 @@ import 'dart:io' show Platform;
 
 import 'package:finance_track/sms/bank_sms.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/services.dart';
 import 'package:flutter_sms_inbox/flutter_sms_inbox.dart';
-import 'package:notification_listener_service/notification_event.dart';
 import 'package:notification_listener_service/notification_listener_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+const _notificationChannel = MethodChannel('x-slayer/notifications_channel');
+const _notificationEvents = EventChannel('x-slayer/notifications_event');
 
 const _enabledKey = 'sms_enabled';
 const _appsKey = 'upi_enabled';
@@ -176,15 +179,26 @@ class SmsInbox {
     ];
   }
 
+  /// Live payment notifications. Each alert is parsed on its own, so one
+  /// incomplete notification does not stop the rest.
+  static Stream<BankSms> get alerts {
+    return _notificationEvents.receiveBroadcastStream().expand((event) {
+      final parsed = alertFromMap(event);
+      return parsed == null ? const <BankSms>[] : [parsed];
+    });
+  }
+
   static Future<List<BankSms>> _appAlerts(SharedPreferences preferences) async {
     final alerts = <BankSms>[
       for (final item in preferences.getStringList(_alertsKey) ?? const [])
         BankSms.fromJson(jsonDecode(item) as Map<String, dynamic>),
     ];
     try {
-      final active = await NotificationListenerService.getActiveNotifications();
-      for (final event in active) {
-        final parsed = alertFromNotification(event);
+      final active = await _notificationChannel.invokeMethod<List<dynamic>>(
+        'getActiveNotifications',
+      );
+      for (final event in active ?? const []) {
+        final parsed = alertFromMap(event);
         if (parsed != null && !alerts.any((item) => item.id == parsed.id)) {
           alerts.add(parsed);
         }
@@ -256,59 +270,23 @@ class SmsInbox {
   }
 }
 
-const _smsApps = <String>{
-  'com.google.android.apps.messaging',
-  'com.android.mms',
-  'com.android.messaging',
-  'com.samsung.android.messaging',
-  'com.truecaller',
-};
-
-BankSms? alertFromNotification(ServiceNotificationEvent event) {
-  if (event.hasRemoved || event.onGoing) return null;
-  final date = event.timestamp > 0
-      ? DateTime.fromMillisecondsSinceEpoch(event.timestamp)
-      : DateTime.now();
-  return parseUpiNotification(
-        packageName: event.packageName,
-        title: event.title,
-        content: event.content,
-        date: date,
-      ) ??
-      parseSmsNotification(
-        packageName: event.packageName,
-        title: event.title,
-        content: event.content,
-        date: date,
-      );
-}
-
-BankSms? parseSmsNotification({
-  required String packageName,
-  required String title,
-  required String content,
-  required DateTime date,
-}) {
-  final sender = title.trim();
-  final body = content.trim();
-  if (sender.isEmpty || body.isEmpty) return null;
-  if (!_smsApps.contains(packageName) && bankFromSender(sender) == null) {
+BankSms? alertFromMap(Object? event) {
+  if (event is! Map) return null;
+  try {
+    final posted = event['postTime'];
+    final date = posted is num && posted > 0
+        ? DateTime.fromMillisecondsSinceEpoch(posted.toInt())
+        : DateTime.now();
+    return paymentFromNotification(
+      packageName: event['packageName'] as String? ?? '',
+      title: event['title'] as String? ?? '',
+      content: event['content'] as String? ?? '',
+      date: date,
+      removed: event['hasRemoved'] == true,
+      ongoing: event['onGoing'] == true,
+    );
+  } catch (caught) {
+    debugPrint('Could not read one notification: $caught');
     return null;
   }
-  return parseBankSms(
-    id: smsKey(sender, body, date),
-    sender: sender,
-    body: body,
-    date: date,
-  );
-}
-
-String senderKey(String sender) {
-  final parts = sender.toUpperCase().trim().split('-')
-    ..sort((a, b) => b.length.compareTo(a.length));
-  return parts.first;
-}
-
-String smsKey(String sender, String body, DateTime date) {
-  return '${senderKey(sender)}|${date.millisecondsSinceEpoch}|${body.hashCode}';
 }

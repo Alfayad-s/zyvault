@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:finance_track/api/finance_api.dart';
 import 'package:finance_track/chat_store.dart';
 import 'package:finance_track/money.dart';
+import 'package:finance_track/reply_voice.dart';
 import 'package:finance_track/widgets/flower_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:finance_track/widgets/prompt_box.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key, required this.api});
@@ -17,12 +19,21 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatTurn {
-  _ChatTurn({required this.role, required this.content, this.proposal, this.review = 'open'});
+  _ChatTurn({
+    required this.role,
+    required this.content,
+    this.proposal,
+    this.review = 'open',
+    this.voice = false,
+    this.seconds = 0,
+  });
 
   final String role;
   final String content;
   final Map<String, dynamic>? proposal;
   String review;
+  final bool voice;
+  final int seconds;
 }
 
 class _ChatScreenState extends State<ChatScreen> {
@@ -34,6 +45,8 @@ class _ChatScreenState extends State<ChatScreen> {
   var _ready = false;
   var _reveal = -1;
   var _saving = false;
+  var _speaking = -1;
+  var _thread = 0;
   Timer? _clock;
 
   @override
@@ -54,6 +67,8 @@ class _ChatScreenState extends State<ChatScreen> {
               content: turn.content,
               proposal: turn.proposal,
               review: turn.review,
+              voice: turn.voice,
+              seconds: turn.seconds,
             ),
           ),
         );
@@ -66,13 +81,21 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _remember() {
     return ChatStore.write([
       for (final turn in _turns)
-        StoredTurn(role: turn.role, content: turn.content, proposal: turn.proposal, review: turn.review),
+        StoredTurn(
+          role: turn.role,
+          content: turn.content,
+          proposal: turn.proposal,
+          review: turn.review,
+          voice: turn.voice,
+          seconds: turn.seconds,
+        ),
     ]);
   }
 
   @override
   void dispose() {
     _clock?.cancel();
+    ReplyVoice.stop();
     _scroll.dispose();
     super.dispose();
   }
@@ -91,15 +114,16 @@ class _ChatScreenState extends State<ChatScreen> {
     _clock = null;
   }
 
-  Future<void> _send(String text) async {
+  Future<void> _send(String text, {bool voice = false, int seconds = 0}) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || _sending || !_ready) return;
+    final thread = _thread;
     final turns = [
       for (final turn in _turns) StoredTurn(role: turn.role, content: turn.content),
       StoredTurn(role: 'user', content: trimmed),
     ];
     setState(() {
-      _turns.add(_ChatTurn(role: 'user', content: trimmed));
+      _turns.add(_ChatTurn(role: 'user', content: trimmed, voice: voice, seconds: seconds));
       _sending = true;
       _reveal = -1;
     });
@@ -114,7 +138,7 @@ class _ChatScreenState extends State<ChatScreen> {
           for (final turn in turns) {'role': turn.role, 'content': turn.content},
         ],
       );
-      if (!mounted) return;
+      if (!mounted || thread != _thread) return;
       _stopWait();
       setState(() {
         _turns.add(_ChatTurn(role: 'assistant', content: answer.reply, proposal: answer.proposal));
@@ -124,7 +148,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _scrollToEnd();
       unawaited(_remember());
     } on FinanceException catch (caught) {
-      if (!mounted) return;
+      if (!mounted || thread != _thread) return;
       _stopWait();
       setState(() {
         _turns.add(_ChatTurn(role: 'assistant', content: caught.message));
@@ -133,6 +157,27 @@ class _ChatScreenState extends State<ChatScreen> {
       });
       _scrollToEnd();
       unawaited(_remember());
+    }
+  }
+
+  Future<void> _read(int index) async {
+    final text = _turns[index].content;
+    if (_speaking == index) {
+      await ReplyVoice.stop();
+      if (mounted) setState(() => _speaking = -1);
+      return;
+    }
+    setState(() => _speaking = index);
+    final problem = await ReplyVoice.speak(
+      text,
+      onDone: () {
+        if (mounted && _speaking == index) setState(() => _speaking = -1);
+      },
+    );
+    if (!mounted) return;
+    if (problem != null) {
+      setState(() => _speaking = -1);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(problem)));
     }
   }
 
@@ -164,6 +209,35 @@ class _ChatScreenState extends State<ChatScreen> {
     unawaited(_remember());
   }
 
+  Future<void> _deleteHistory() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2C2C2E),
+        title: const Text('Delete this chat?'),
+        content: const Text('The messages on this phone will be removed. Your accounts and transactions stay.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Keep')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Color(0xFFFF6B6B))),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    _thread++;
+    _stopWait();
+    await ReplyVoice.stop();
+    setState(() {
+      _turns.clear();
+      _sending = false;
+      _reveal = -1;
+      _speaking = -1;
+    });
+    await ChatStore.clear();
+  }
+
   void _scrollToEnd() {
     if (_following) return;
     _following = true;
@@ -188,6 +262,13 @@ class _ChatScreenState extends State<ChatScreen> {
             const Text('Chat'),
           ],
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Delete chat',
+            onPressed: _turns.isEmpty ? null : _deleteHistory,
+            icon: Icon(LucideIcons.trash2, color: _turns.isEmpty ? const Color(0xFF5C5C60) : Colors.white),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -249,10 +330,12 @@ class _ChatScreenState extends State<ChatScreen> {
                               color: const Color(0xFFC8F57A),
                               borderRadius: BorderRadius.circular(22),
                             ),
-                            child: Text(
-                              turn.content,
-                              style: const TextStyle(color: Color(0xFF161616), fontSize: 16, height: 1.35),
-                            ),
+                            child: turn.voice
+                                ? _VoiceMessage(text: turn.content, seconds: turn.seconds)
+                                : Text(
+                                    turn.content,
+                                    style: const TextStyle(color: Color(0xFF161616), fontSize: 16, height: 1.35),
+                                  ),
                           ),
                         );
                       }
@@ -278,6 +361,18 @@ class _ChatScreenState extends State<ChatScreen> {
                                           textAlign: TextAlign.left,
                                           style: const TextStyle(color: Color(0xFFF2F2F2), fontSize: 16, height: 1.45),
                                         ),
+                                  TextButton.icon(
+                                    onPressed: () => _read(index),
+                                    icon: Icon(
+                                      _speaking == index ? LucideIcons.square : LucideIcons.volume2,
+                                      size: 16,
+                                      color: const Color(0xFFC8F57A),
+                                    ),
+                                    label: Text(
+                                      _speaking == index ? 'Stop' : 'Read',
+                                      style: const TextStyle(color: Color(0xFFC8F57A)),
+                                    ),
+                                  ),
                                   if (turn.proposal != null && turn.review == 'open')
                                     _ReviewCard(
                                       proposal: turn.proposal!,
@@ -308,6 +403,43 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _VoiceMessage extends StatelessWidget {
+  const _VoiceMessage({required this.text, required this.seconds});
+
+  final String text;
+  final int seconds;
+
+  @override
+  Widget build(BuildContext context) {
+    final clock = '0:${seconds.clamp(0, 59).toString().padLeft(2, '0')}';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(LucideIcons.mic, size: 18, color: Color(0xFF17310C)),
+            const SizedBox(width: 8),
+            for (final height in [8.0, 14.0, 10.0, 16.0, 9.0, 13.0, 7.0])
+              Container(
+                width: 3,
+                height: height,
+                margin: const EdgeInsets.only(right: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF17310C),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            const Spacer(),
+            Text(clock, style: const TextStyle(color: Color(0xFF17310C), fontSize: 13, fontWeight: FontWeight.w600)),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(text, style: const TextStyle(color: Color(0xFF161616), fontSize: 16, height: 1.35)),
+      ],
     );
   }
 }
