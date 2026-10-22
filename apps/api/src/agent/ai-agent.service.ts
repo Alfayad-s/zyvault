@@ -10,7 +10,9 @@ import { CategoriesService, type Category } from '../categories/categories.servi
 import type { Goal } from '../goals/goals.js';
 import { GoalsService } from '../goals/goals.service.js';
 import { TransactionsService } from '../transactions/transactions.service.js';
+import { listedItems, shopVisit } from './bill-items.js';
 import { LlmClient, type BillImage } from './llm.client.js';
+import type { VisionRead } from './vision.client.js';
 import {
   buildUserPrompt,
   memoryFrom,
@@ -64,6 +66,20 @@ export function matchAccount(answer: string | null, accounts: Account[]): Accoun
     (account) => account.name.toLowerCase().includes(wanted) || wanted.includes(account.name.toLowerCase()),
   );
   return partial.length === 1 ? partial[0] : null;
+}
+
+function supermarket(spend: { merchant: string | null; rawDescription: string }): boolean {
+  return /\b(supermarket|emporium|hypermarket|kirana|grocery|groceries|dmart|bigbasket|blinkit|zepto)\b/i.test(
+    `${spend.merchant ?? ''} ${spend.rawDescription}`,
+  );
+}
+
+function groceryGuess(description: string): string | null {
+    return /\b(milk|bread|soap|pear|wash|rice|oil|atta|sugar|tea|coffee|biscuit|snack|fruit|vegetable|shampoo|toothpaste|detergent|grocery|dal|flour)\b/i.test(
+    description,
+  )
+    ? 'Groceries'
+    : null;
 }
 
 function accountWords(account: Account): string[] {
@@ -136,31 +152,42 @@ export class AIAgentService {
       expense: categories.filter((item) => item.kind === 'expense').map((item) => item.name),
       income: categories.filter((item) => item.kind === 'income').map((item) => item.name),
     };
-    const printed = await this.billText(image);
-    const items = printed !== null;
-    const prompt = buildUserPrompt({
-      sentence: text,
-      today,
-      now,
-      categories: names,
-      memory: memoryFrom(history),
-      receipt: image !== undefined && !items,
-      items,
-      printed: printed ?? undefined,
-      accounts: accounts.length > 1 ? accounts.map(accountLabel) : undefined,
-      goals: goals.map((goal) => goal.name),
-    });
-    const reply = await this.llm.complete(
-      items ? receiptItemsInstruction : image ? receiptInstruction : systemInstruction,
-      prompt,
-      items ? undefined : image,
-    );
+    const seen = await this.billText(image);
+    const extracted = seen ? listedItems(seen, today) : [];
     let spends: ParsedSpend[];
-    try {
-      spends = normalizeSpends(readLlmJson(reply), today, !image, now);
-    } catch (caught) {
-      this.logger.warn(`LLM reply was not JSON: ${String(caught)}`);
-      throw new ServiceUnavailableException('The AI parser returned an unreadable reply');
+    if (extracted.length > 0) {
+      const visit = shopVisit(extracted);
+      if (supermarket(visit) || groceryGuess(visit.rawDescription)) visit.category = 'Groceries';
+      this.logger.log(`Vision listed ${extracted.length} bill items at ${visit.merchant ?? 'the shop'}`);
+      spends = [visit];
+    } else {
+      const items = seen !== null;
+      if (items) {
+        this.logger.warn(`No priced rows in: ${seen.lines.join(' | ').slice(0, 400)}`);
+      }
+      const prompt = buildUserPrompt({
+        sentence: text,
+        today,
+        now,
+        categories: names,
+        memory: memoryFrom(history),
+        receipt: image !== undefined && !items,
+        items,
+        printed: seen?.text,
+        accounts: accounts.length > 1 ? accounts.map(accountLabel) : undefined,
+        goals: goals.map((goal) => goal.name),
+      });
+      const reply = await this.llm.complete(
+        items ? receiptItemsInstruction : image ? receiptInstruction : systemInstruction,
+        prompt,
+        items ? undefined : image,
+      );
+      try {
+        spends = normalizeSpends(readLlmJson(reply), today, !image, now);
+      } catch (caught) {
+        this.logger.warn(`LLM reply was not JSON: ${String(caught)}`);
+        throw new ServiceUnavailableException('The AI parser returned an unreadable reply');
+      }
     }
     if (spends.length === 0) {
       throw new BadRequestException('No amount found in that sentence');
@@ -176,11 +203,11 @@ export class AIAgentService {
     });
   }
 
-  private async billText(image?: BillImage): Promise<string | null> {
+  private async billText(image?: BillImage): Promise<VisionRead | null> {
     if (!image || !this.vision.configured()) return null;
     try {
-      const text = await this.vision.read(image);
-      return text.trim() ? text : null;
+      const read = await this.vision.read(image);
+      return read.text.trim() ? read : null;
     } catch (caught) {
       this.logger.warn(`Vision could not read the bill, using the photo instead: ${String(caught)}`);
       return null;
@@ -196,9 +223,13 @@ export class AIAgentService {
       name ? sameKind.find((item) => item.name.toLowerCase() === name.toLowerCase()) : undefined;
     const byName = (name: string | null) => exact(name) ?? exact(name && broaderCategory(name));
 
-    const picked = byName(spend.category);
+    const supermarketCategory =
+      spend.category === 'Groceries'
+        ? (exact('Supermarkets') ?? exact('Supermarket') ?? byName('Groceries'))
+        : undefined;
+    const picked = supermarketCategory ?? byName(spend.category) ?? byName(groceryGuess(spend.rawDescription));
     if (picked) {
-      return this.result(spend, picked, 'llm', null);
+      return this.result(spend, picked, spend.category ? 'llm' : 'fallback', null);
     }
 
     try {

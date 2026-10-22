@@ -1,4 +1,5 @@
 import 'package:finance_track/api/finance_api.dart';
+import 'package:finance_track/widgets/pull_refresh.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -27,11 +28,15 @@ class _ServerStatusScreenState extends State<ServerStatusScreen> {
     _load();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  Future<void> _load({bool showSpinner = true}) async {
+    if (showSpinner) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    } else if (_error != null) {
+      setState(() => _error = null);
+    }
     try {
       final report = await widget.api.serverStatus();
       if (!mounted) return;
@@ -67,7 +72,10 @@ class _ServerStatusScreenState extends State<ServerStatusScreen> {
           ),
         ],
       ),
-      body: ListView(
+      body: PullRefresh(
+        onRefresh: () => _load(showSpinner: false),
+        child: ListView(
+        physics: pullPhysics,
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
           Text(widget.api.baseUrl, style: const TextStyle(color: _muted, fontSize: 13)),
@@ -123,6 +131,7 @@ class _ServerStatusScreenState extends State<ServerStatusScreen> {
             ],
           ],
         ],
+        ),
       ),
     );
   }

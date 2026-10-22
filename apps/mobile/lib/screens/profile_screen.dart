@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:finance_track/api/finance_api.dart';
 import 'package:finance_track/app_lock.dart';
 import 'package:finance_track/ledger.dart';
 import 'package:finance_track/models.dart';
@@ -13,6 +14,7 @@ import 'package:finance_track/screens/categories_screen.dart';
 import 'package:finance_track/screens/review_sheet.dart';
 import 'package:finance_track/screens/server_status_screen.dart';
 import 'package:finance_track/sms/sms_inbox.dart';
+import 'package:finance_track/widgets/pull_refresh.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -38,7 +40,16 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lock = this.lock;
-    return ListView(
+    return PullRefresh(
+      onRefresh: () async {
+        await Future.wait([
+          ledger.refresh(),
+          PersonProfile.load(),
+          ProfilePhoto.load(),
+        ]);
+      },
+      child: ListView(
+      physics: pullPhysics,
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
       children: [
         const _ProfileHeader(),
@@ -136,6 +147,22 @@ class ProfileScreen extends StatelessWidget {
         SizedBox(
           height: 54,
           child: OutlinedButton.icon(
+            onPressed: () => _clearData(context),
+            icon: const Icon(LucideIcons.trash2),
+            label: const Text('Remove all data'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFFFF6B6B),
+              side: const BorderSide(color: Color(0xFF3A3A3C)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 54,
+          child: OutlinedButton.icon(
             onPressed: onLogout,
             icon: const Icon(LucideIcons.logOut),
             label: const Text('Sign out'),
@@ -149,7 +176,37 @@ class ProfileScreen extends StatelessWidget {
           ),
         ),
       ],
+      ),
     );
+  }
+
+  Future<void> _clearData(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: _card,
+        title: const Text('Remove all data?'),
+        content: const Text(
+          'Payments, accounts, budgets, plans, people, and goals will be deleted. Your name, photo, and sign-in stay. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Keep')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove data', style: TextStyle(color: Color(0xFFFF6B6B))),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await ledger.clearRecords();
+      if (context.mounted) _show(context, 'Your data was removed');
+    } on FinanceException catch (error) {
+      if (context.mounted) _show(context, error.message);
+    } catch (caught) {
+      if (context.mounted) _show(context, '$caught');
+    }
   }
 
   static void _show(BuildContext context, String message) {

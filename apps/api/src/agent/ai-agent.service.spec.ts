@@ -15,6 +15,7 @@ import { VisionClient } from './vision.client.js';
 import { ZeroShotClient } from './zero-shot.client.js';
 
 const categories = [
+  { id: 'groceries', name: 'Groceries', kind: 'expense' as const },
   { id: 'food', name: 'Food', kind: 'expense' as const },
   { id: 'transport', name: 'Transport', kind: 'expense' as const },
   { id: 'other', name: 'Other', kind: 'expense' as const },
@@ -309,18 +310,45 @@ describe('AIAgentService', () => {
       { mimeType: 'image/jpeg', data: 'abc' },
     );
 
-    expect(spends.map((spend) => [spend.amount, spend.rawDescription])).toEqual([
-      [4000, 'milk'],
-      [3000, 'bread'],
+    expect(spends.map((spend) => [spend.amount, spend.rawDescription, spend.categoryName])).toEqual([
+      [7000, 'milk ₹40, bread ₹30', 'Groceries'],
     ]);
     expect(String(fetch.mock.calls[0]?.[0])).toContain('images:annotate');
+    expect(fetch.mock.calls.some(([url]) => String(url).includes('generativelanguage'))).toBe(false);
+  });
+
+  it('reads a bill from Vision text and does not wait on the photo', async () => {
+    const fetch = vi.fn((url: string) =>
+      Promise.resolve(
+        url.includes('vision.googleapis.com')
+          ? reply({ responses: [{ fullTextAnnotation: { text: 'Paid at the counter' } }] })
+          : gemini([
+              {
+                amount: 180,
+                merchant: 'Shop',
+                date: '2026-10-20',
+                rawDescription: 'shop bill',
+                kind: 'expense',
+                category: 'Food',
+              },
+            ]),
+      ),
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    const [spend] = await agent({ ...keys, GOOGLE_CLOUD_VISION_API_KEY: 'v' }).parse(
+      'user',
+      '',
+      '2026-10-20',
+      { mimeType: 'image/jpeg', data: 'abc' },
+    );
+
+    expect(spend.amount).toBe(18000);
     const body = JSON.parse(fetch.mock.calls[1]?.[1]?.body as string) as {
-      systemInstruction: { parts: { text: string }[] };
       contents: { parts: { text?: string; inlineData?: unknown }[] }[];
     };
-    expect(body.contents[0]?.parts[0]?.inlineData).toBeUndefined();
-    expect(body.contents[0]?.parts[0]?.text).toContain('Milk 40');
-    expect(body.systemInstruction.parts[0]?.text).toContain('one object per item');
+    expect(body.contents[0]?.parts.some((part) => part.inlineData)).toBe(false);
+    expect(body.contents[0]?.parts[0]?.text).toContain('Paid at the counter');
   });
 
   it('keeps the one-total photo read when Vision returns no words', async () => {

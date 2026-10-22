@@ -3,6 +3,7 @@ import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
 import 'package:finance_track/reminders.dart';
 import 'package:finance_track/widgets/category_icon.dart';
+import 'package:finance_track/widgets/pull_refresh.dart';
 import 'package:finance_track/widgets/shimmer.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -86,9 +87,10 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
   @override
   Widget build(BuildContext context) {
     final items = _items;
-    final body = RefreshIndicator(
+    final body = PullRefresh(
       onRefresh: _load,
       child: ListView(
+        physics: pullPhysics,
         padding: EdgeInsets.fromLTRB(16, 8, 16, widget.embedded ? 120 : 40),
         children: [
           if (_error != null)

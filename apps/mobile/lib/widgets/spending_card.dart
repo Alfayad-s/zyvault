@@ -49,6 +49,29 @@ const _namedColors = <String, Color>{
   'salary': Color(0xFF8FCB9B),
 };
 
+List<SpendingSlice> slicesFromTotals({
+  required String kind,
+  required List<CategoryTotal> totals,
+}) {
+  final rows = totals.where((item) => item.kind == kind && item.total > 0).toList()
+    ..sort((a, b) {
+      final byAmount = b.total.compareTo(a.total);
+      if (byAmount != 0) return byAmount;
+      return a.name.compareTo(b.name);
+    });
+  return [
+    for (var index = 0; index < rows.length; index++)
+      SpendingSlice(
+        name: rows[index].name,
+        amount: rows[index].total,
+        kind: kind,
+        color:
+            _namedColors[rows[index].name.toLowerCase()] ??
+            spendingPalette[index % spendingPalette.length],
+      ),
+  ];
+}
+
 List<SpendingSlice> spendingSlices({
   required String kind,
   required List<Category> categories,

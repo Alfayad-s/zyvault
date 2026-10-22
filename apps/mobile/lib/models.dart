@@ -100,6 +100,68 @@ class CategoryIconOption {
   }
 }
 
+class StatementLine {
+  const StatementLine({
+    required this.occurredOn,
+    required this.note,
+    required this.amount,
+    required this.kind,
+    required this.categoryId,
+    required this.categoryName,
+    required this.duplicate,
+    required this.uncertain,
+  });
+
+  final String occurredOn;
+  final String note;
+  final int amount;
+  final String kind;
+  final String categoryId;
+  final String categoryName;
+  final bool duplicate;
+  final bool uncertain;
+
+  StatementLine copyWith({
+    String? kind,
+    String? categoryId,
+    String? categoryName,
+    bool? uncertain,
+  }) {
+    return StatementLine(
+      occurredOn: occurredOn,
+      note: note,
+      amount: amount,
+      kind: kind ?? this.kind,
+      categoryId: categoryId ?? this.categoryId,
+      categoryName: categoryName ?? this.categoryName,
+      duplicate: duplicate,
+      uncertain: uncertain ?? this.uncertain,
+    );
+  }
+
+  factory StatementLine.fromJson(Map<String, dynamic> json) {
+    return StatementLine(
+      occurredOn: json['occurredOn'] as String,
+      note: json['note'] as String? ?? '',
+      amount: (json['amount'] as num).toInt(),
+      kind: json['kind'] as String? ?? 'expense',
+      categoryId: json['categoryId'] as String,
+      categoryName: json['categoryName'] as String? ?? '',
+      duplicate: json['duplicate'] as bool? ?? false,
+      uncertain: json['uncertain'] as bool? ?? false,
+    );
+  }
+
+  Map<String, dynamic> toCommitJson() => {
+    'accountId': '',
+    'categoryId': categoryId,
+    'amount': amount,
+    'kind': kind,
+    'occurredOn': occurredOn,
+    if (note.trim().isNotEmpty) 'note': note.trim(),
+  };
+}
+
 class TransactionItem {
   const TransactionItem({
     required this.id,
@@ -257,6 +319,7 @@ class ParsedSpend {
     String? note,
     String? accountId,
     String? accountName,
+    bool clearDebt = false,
   }) {
     return ParsedSpend(
       amount: amount ?? this.amount,
@@ -269,7 +332,7 @@ class ParsedSpend {
       accountId: accountId ?? this.accountId,
       accountName: accountName ?? this.accountName,
       schedule: schedule,
-      debt: debt,
+      debt: clearDebt ? null : debt,
       goal: goal,
     );
   }
@@ -615,27 +678,47 @@ class Debts {
   }
 }
 
+class AccountChange {
+  const AccountChange({required this.accountId, required this.change});
+
+  final String accountId;
+  final int change;
+
+  factory AccountChange.fromJson(Map<String, dynamic> json) {
+    return AccountChange(
+      accountId: json['accountId'] as String,
+      change: (json['change'] as num).toInt(),
+    );
+  }
+}
+
 class Summary {
   const Summary({
     required this.balance,
     required this.monthIncome,
     required this.monthExpense,
     required this.categories,
+    this.accountChanges = const [],
   });
 
   final int balance;
   final int monthIncome;
   final int monthExpense;
   final List<CategoryTotal> categories;
+  final List<AccountChange> accountChanges;
 
   factory Summary.fromJson(Map<String, dynamic> json) {
     final categories = json['categories'] as List<dynamic>? ?? [];
+    final accountChanges = json['accountChanges'] as List<dynamic>? ?? [];
     return Summary(
       balance: (json['balance'] as num).toInt(),
       monthIncome: (json['monthIncome'] as num).toInt(),
       monthExpense: (json['monthExpense'] as num).toInt(),
       categories: categories
           .map((item) => CategoryTotal.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      accountChanges: accountChanges
+          .map((item) => AccountChange.fromJson(item as Map<String, dynamic>))
           .toList(),
     );
   }

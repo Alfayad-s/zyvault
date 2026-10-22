@@ -1,10 +1,13 @@
 import 'dart:async';
 
+import 'package:finance_track/activity_cache.dart';
 import 'package:finance_track/api/finance_api.dart';
 import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
 import 'package:finance_track/widgets/category_icon.dart';
 import 'package:flutter/foundation.dart' hide Category, Summary;
+
+const transactionPageSize = 40;
 
 class Ledger extends ChangeNotifier {
   Ledger(this.api, {this.onUnauthorized});
@@ -22,10 +25,22 @@ class Ledger extends ChangeNotifier {
   List<Schedule> planned = [];
   Object? error;
   bool loading = false;
+  bool loadingMore = false;
+  bool transactionsHasMore = false;
+  int _txGeneration = 0;
   DateTime month = DateTime(DateTime.now().year, DateTime.now().month);
 
+  Future<void> clearRecords() async {
+    await api.clearRecords();
+    await ActivityCache.clear();
+    month = DateTime(DateTime.now().year, DateTime.now().month);
+    await refresh();
+  }
+
   Future<void> refresh() async {
+    final generation = ++_txGeneration;
     loading = summary == null;
+    loadingMore = false;
     error = null;
     notifyListeners();
     try {
@@ -34,8 +49,7 @@ class Ledger extends ChangeNotifier {
       unawaited(loadCategoryIcons());
       final results = await Future.wait<Object>([
         api.summary(monthKey(month)),
-        api.transactions(limit: 5),
-        api.transactions(month: monthKey(month)),
+        api.transactions(month: monthKey(month), limit: transactionPageSize),
         api.accounts(),
         api.categories(),
         api.budgets(monthKey(month)),
@@ -43,24 +57,50 @@ class Ledger extends ChangeNotifier {
         api.goals().catchError(_keepGoals),
         api.schedules().catchError(_keepPlanned),
       ]);
+      if (generation != _txGeneration) return;
       summary = results[0] as Summary;
-      recent = results[1] as List<TransactionItem>;
-      transactions = results[2] as List<TransactionItem>;
-      accounts = results[3] as List<Account>;
-      categories = results[4] as List<Category>;
-      budgets = results[5] as List<Budget>;
-      debts = results[6] as Debts;
-      goals = results[7] as List<Goal>;
-      planned = results[8] as List<Schedule>;
+      transactions = results[1] as List<TransactionItem>;
+      transactionsHasMore = transactions.length == transactionPageSize;
+      recent = transactions.take(5).toList();
+      accounts = results[2] as List<Account>;
+      categories = results[3] as List<Category>;
+      budgets = results[4] as List<Budget>;
+      debts = results[5] as Debts;
+      goals = results[6] as List<Goal>;
+      planned = results[7] as List<Schedule>;
       CategoryIcon.remember(categories);
     } on AuthExpiredException {
       await onUnauthorized?.call();
     } catch (caught) {
-      error = caught;
-    } finally {
-      loading = false;
-      notifyListeners();
+      if (generation == _txGeneration) error = caught;
     }
+    if (generation != _txGeneration) return;
+    loading = false;
+    notifyListeners();
+  }
+
+  Future<void> loadMoreTransactions() async {
+    if (loading || loadingMore || !transactionsHasMore) return;
+    final generation = _txGeneration;
+    final offset = transactions.length;
+    loadingMore = true;
+    notifyListeners();
+    try {
+      final page = await api.transactions(
+        month: monthKey(month),
+        limit: transactionPageSize,
+        offset: offset,
+      );
+      if (generation != _txGeneration) return;
+      transactions = [...transactions, ...page];
+      transactionsHasMore = page.length == transactionPageSize;
+      recent = transactions.take(5).toList();
+    } on AuthExpiredException {
+      await onUnauthorized?.call();
+    } catch (_) {}
+    if (generation != _txGeneration) return;
+    loadingMore = false;
+    notifyListeners();
   }
 
   Future<Debts> _keepDebts(Object caught) async {
@@ -175,7 +215,10 @@ class Ledger extends ChangeNotifier {
   }
 
   void changeMonth(int delta) {
-    month = DateTime(month.year, month.month + delta);
+    final today = DateTime.now();
+    final next = DateTime(month.year, month.month + delta);
+    if (DateTime(next.year, next.month).isAfter(DateTime(today.year, today.month))) return;
+    month = DateTime(next.year, next.month);
     refresh();
   }
 
@@ -325,6 +368,39 @@ class Ledger extends ChangeNotifier {
       note: note,
     );
     await refresh();
+  }
+
+  Future<List<StatementLine>> previewStatement({
+    required String fileBase64,
+    required String mimeType,
+    required String accountId,
+    String? password,
+  }) {
+    return api.previewStatement(
+      fileBase64: fileBase64,
+      mimeType: mimeType,
+      accountId: accountId,
+      password: password,
+    );
+  }
+
+  Future<int> commitStatement({
+    required String accountId,
+    required List<StatementLine> rows,
+  }) async {
+    final saved = await api.commitStatement(accountId: accountId, rows: rows);
+    if (rows.isNotEmpty) {
+      final today = DateTime.now();
+      final current = '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}';
+      final latest = rows.map((row) => row.occurredOn).reduce((a, b) => a.compareTo(b) > 0 ? a : b);
+      final chosen = rows.any((row) => row.occurredOn.startsWith(current)) ? current : latest;
+      final parts = chosen.split('-');
+      final year = int.tryParse(parts[0]);
+      final monthNumber = int.tryParse(parts[1]);
+      if (year != null && monthNumber != null) month = DateTime(year, monthNumber);
+    }
+    await refresh();
+    return saved;
   }
 
   Future<List<ParsedSpend>> previewBill({

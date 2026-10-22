@@ -277,7 +277,10 @@ void main() {
     expect(find.text('Enter an amount'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField).first, '450');
+    await tester.tap(find.text('Choose a category'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Food'));
+    await tester.pumpAndSettle();
     expect(find.text('Cash'), findsOneWidget);
     await tester.tap(find.bySemanticsLabel('Paying from Cash, tap to change'));
     await tester.pumpAndSettle();
@@ -1405,6 +1408,14 @@ void main() {
     expect(formatCompact(860000), '₹8.6K');
     expect(formatCompact(0), '₹0');
     expect(formatRupees(211400), '₹2,114');
+    expect(
+      personPaymentNote(name: 'Rahul', amount: 10000, kind: 'expense', detail: 'i spend'),
+      'sent Rahul ₹100',
+    );
+    expect(
+      personPaymentNote(name: 'Rahul', amount: 15000, kind: 'expense', detail: 'pizza'),
+      'sent Rahul ₹150, pizza',
+    );
     final spend = parseSpendLine('150 food');
     expect(spend?.amount, 15000);
     expect(spend?.reason, 'food');
@@ -1685,7 +1696,8 @@ void main() {
                 ),
               ],
             ),
-            recent: const [
+            recent: const [],
+            monthTransactions: const [
               TransactionItem(
                 id: '1',
                 accountId: 'cash',
@@ -1777,7 +1789,8 @@ void main() {
               monthExpense: 1800,
               categories: [],
             ),
-            recent: const [
+            recent: const [],
+            monthTransactions: const [
               TransactionItem(
                 id: '1',
                 accountId: 'bank',

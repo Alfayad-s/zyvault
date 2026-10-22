@@ -4,6 +4,7 @@ import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
 import 'package:finance_track/screens/people_section.dart';
 import 'package:finance_track/widgets/bank_logo.dart';
+import 'package:finance_track/widgets/pull_refresh.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -23,7 +24,10 @@ class AccountsScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: ledger,
       builder: (context, _) {
-        return ListView(
+        return PullRefresh(
+          onRefresh: ledger.refresh,
+          child: ListView(
+          physics: pullPhysics,
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
           children: [
             if (ledger.accounts.isEmpty)
@@ -76,6 +80,7 @@ class AccountsScreen extends StatelessWidget {
             const SizedBox(height: 32),
             PeopleSection(ledger: ledger),
           ],
+          ),
         );
       },
     );

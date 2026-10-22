@@ -30,12 +30,18 @@ export class TransactionsController {
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Query('kind') kind?: string,
+    @Query('q') q?: string,
   ) {
     return this.transactions.list(
       user.id,
       this.month(month),
       this.limit(limit),
       this.range(from, to),
+      this.offset(offset),
+      this.kind(kind),
+      this.query(q),
     );
   }
 
@@ -77,8 +83,32 @@ export class TransactionsController {
       return 50;
     }
     const parsed = Number(limit);
-    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 500) {
-      throw new BadRequestException('limit must be from 1 to 500');
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 1500) {
+      throw new BadRequestException('limit must be from 1 to 1500');
+    }
+    return parsed;
+  }
+
+  private query(q?: string): string | undefined {
+    const trimmed = q?.trim() ?? '';
+    if (!trimmed) return undefined;
+    if (trimmed.length > 40) throw new BadRequestException('search must be 40 characters or less');
+    return trimmed;
+  }
+
+  private kind(kind?: string): 'income' | 'expense' | undefined {
+    if (kind === undefined || kind === '') return undefined;
+    if (kind !== 'income' && kind !== 'expense') {
+      throw new BadRequestException('kind must be income or expense');
+    }
+    return kind;
+  }
+
+  private offset(offset?: string): number {
+    if (offset === undefined || offset === '') return 0;
+    const parsed = Number(offset);
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed > 100000) {
+      throw new BadRequestException('offset must be from 0 to 100000');
     }
     return parsed;
   }

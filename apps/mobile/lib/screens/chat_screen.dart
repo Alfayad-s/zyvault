@@ -5,6 +5,7 @@ import 'package:finance_track/chat_store.dart';
 import 'package:finance_track/money.dart';
 import 'package:finance_track/reply_voice.dart';
 import 'package:finance_track/widgets/flower_avatar.dart';
+import 'package:finance_track/widgets/pull_refresh.dart';
 import 'package:flutter/material.dart';
 import 'package:finance_track/widgets/prompt_box.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -53,6 +54,29 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _restore();
+  }
+
+  Future<void> _reload() async {
+    if (_sending) return;
+    final saved = await ChatStore.read();
+    if (!mounted || _sending) return;
+    setState(() {
+      _turns
+        ..clear()
+        ..addAll(
+          saved.map(
+            (turn) => _ChatTurn(
+              role: turn.role,
+              content: turn.content,
+              proposal: turn.proposal,
+              review: turn.review,
+              voice: turn.voice,
+              seconds: turn.seconds,
+            ),
+          ),
+        );
+      _ready = true;
+    });
   }
 
   Future<void> _restore() async {
@@ -275,26 +299,26 @@ class _ChatScreenState extends State<ChatScreen> {
           Expanded(
             child: !_ready
                 ? const Center(child: FlowerAvatar(size: 72))
-                : _turns.isEmpty
-                ? const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(32),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          FlowerAvatar(size: 88),
-                          SizedBox(height: 16),
-                          Text(
-                            'Ask about this month’s spending, balances, or budgets. Answers use a short snapshot of your money.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Color(0xFF8E8E93)),
-                          ),
-                        ],
+                : PullRefresh(
+                    onRefresh: _reload,
+                    child: _turns.isEmpty
+                ? ListView(
+                    physics: pullPhysics,
+                    padding: const EdgeInsets.all(32),
+                    children: const [
+                      SizedBox(height: 80),
+                      FlowerAvatar(size: 88),
+                      SizedBox(height: 16),
+                      Text(
+                        'Ask about this month’s spending, balances, or budgets. Answers use a short snapshot of your money.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Color(0xFF8E8E93)),
                       ),
-                    ),
+                    ],
                   )
                 : ListView.builder(
                     controller: _scroll,
+                    physics: pullPhysics,
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                     itemCount: _turns.length + (_sending ? 1 : 0),
                     itemBuilder: (context, index) {
@@ -393,6 +417,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       );
                     },
                   ),
+                ),
           ),
           SafeArea(
             top: false,

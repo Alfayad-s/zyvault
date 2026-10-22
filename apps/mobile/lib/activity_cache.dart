@@ -11,11 +11,15 @@ class ActivityCache {
   SharedPreferences? _preferences;
   final Map<String, List<TransactionItem>> _memory = {};
 
-  List<TransactionItem>? memory(String from, String to) =>
-      _memory[_key(from, to)];
+  List<TransactionItem>? memory(String from, String to, {String? kind}) =>
+      _memory[_key(from, to, kind)];
 
-  Future<List<TransactionItem>?> read(String from, String to) async {
-    final key = _key(from, to);
+  void forget() {
+    _memory.clear();
+  }
+
+  Future<List<TransactionItem>?> read(String from, String to, {String? kind}) async {
+    final key = _key(from, to, kind);
     final cached = _memory[key];
     if (cached != null) return cached;
     try {
@@ -33,9 +37,10 @@ class ActivityCache {
   Future<void> write(
     String from,
     String to,
-    List<TransactionItem> items,
-  ) async {
-    final key = _key(from, to);
+    List<TransactionItem> items, {
+    String? kind,
+  }) async {
+    final key = _key(from, to, kind);
     _memory[key] = items;
     try {
       final preferences = await _store();
@@ -60,7 +65,8 @@ class ActivityCache {
     return _preferences ??= await SharedPreferences.getInstance();
   }
 
-  String _key(String from, String to) => '$from:$to';
+  String _key(String from, String to, [String? kind]) =>
+      kind == null ? '$from:$to' : '$from:$to:$kind';
 
   List<TransactionItem> _decode(String raw) {
     final items = jsonDecode(raw) as List<dynamic>;

@@ -20,7 +20,10 @@ const moneyTables = [
   'scheduled_transactions',
 ] as const;
 
-const pushTables = ['device_tokens', 'push_log'] as const;
+const pushTables = [
+  { table: 'device_tokens', column: 'token' },
+  { table: 'push_log', column: 'key' },
+] as const;
 
 @Injectable()
 export class StatusService {
@@ -32,7 +35,11 @@ export class StatusService {
 
   async collect(): Promise<{ status: 'ok' | 'problem'; checks: StatusCheck[] }> {
     const checks = await Promise.all([
-      this.tables('Database', moneyTables, 'Money records can be read'),
+      this.tables(
+        'Database',
+        moneyTables.map((table) => ({ table, column: 'id' })),
+        'Money records can be read',
+      ),
       this.signIn(),
       this.keyCheck('Email codes', 'RESEND_API_KEY', 'https://api.resend.com/domains'),
       this.keyCheck('Chat', 'GROQ_API_KEY', 'https://api.groq.com/openai/v1/models'),
@@ -51,13 +58,13 @@ export class StatusService {
 
   private async tables(
     name: string,
-    tables: readonly string[],
+    tables: readonly { table: string; column: string }[],
     okDetail: string,
   ): Promise<StatusCheck> {
     const failed: string[] = [];
     await Promise.all(
-      tables.map(async (table) => {
-        const { error } = await this.supabase.from(table).select('id').limit(1);
+      tables.map(async ({ table, column }) => {
+        const { error } = await this.supabase.from(table).select(column).limit(1);
         if (error) failed.push(`${table}: ${clip(error.message)}`);
       }),
     );

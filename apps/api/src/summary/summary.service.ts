@@ -7,6 +7,7 @@ import { buildSummary, SummaryTransaction } from './summary.js';
 
 type AmountRow = { amount: number; kind: 'income' | 'expense' };
 type MonthRow = AmountRow & {
+  account_id: string;
   category_id: string;
   category: { name: string } | { name: string }[] | null;
 };
@@ -45,7 +46,7 @@ export class SummaryService {
       allRows<MonthRow>((from, to) =>
         this.supabase
           .from('transactions')
-          .select('amount, kind, category_id, category:categories(name)')
+          .select('amount, kind, account_id, category_id, category:categories(name)')
           .eq('user_id', userId)
           .gte('occurred_on', start)
           .lt('occurred_on', end)
@@ -63,10 +64,41 @@ export class SummaryService {
     const monthTransactions: SummaryTransaction[] = monthRows.map((row) => ({
       amount: row.amount,
       kind: row.kind,
+      accountId: row.account_id,
       categoryId: row.category_id,
       categoryName: categoryName(row.category),
     }));
 
     return buildSummary(openingBalance, allTransactions, monthTransactions);
+  }
+
+  /** Category totals for a window. The phone gets the totals, not every payment. */
+  async forRange(userId: string, from: string, to: string) {
+    const rows = await allRows<MonthRow>((start, end) =>
+      this.supabase
+        .from('transactions')
+        .select('amount, kind, account_id, category_id, category:categories(name)')
+        .eq('user_id', userId)
+        .gte('occurred_on', from)
+        .lt('occurred_on', to)
+        .order('id')
+        .range(start, end),
+    );
+    const summary = buildSummary(
+      0,
+      [],
+      rows.map((row) => ({
+        amount: row.amount,
+        kind: row.kind,
+        accountId: row.account_id,
+        categoryId: row.category_id,
+        categoryName: categoryName(row.category),
+      })),
+    );
+    return {
+      income: summary.monthIncome,
+      expense: summary.monthExpense,
+      categories: summary.categories,
+    };
   }
 }

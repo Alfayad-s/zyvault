@@ -175,6 +175,10 @@ class FinanceApi {
   final http.Client _client;
   final String baseUrl;
 
+  Future<void> clearRecords() async {
+    await _send('POST', '/account/clear', timeout: const Duration(seconds: 60));
+  }
+
   Future<ServerReport> serverStatus() async {
     final body = await _send('GET', '/health/details', timeout: const Duration(seconds: 20));
     return ServerReport.fromJson(body as Map<String, dynamic>);
@@ -486,17 +490,36 @@ class FinanceApi {
     await _send('DELETE', '/budgets/$id');
   }
 
+  Future<List<CategoryTotal>> periodCategories({
+    required String from,
+    required String to,
+  }) async {
+    final body = await _send('GET', '/summary/period?from=$from&to=$to');
+    final categories = (body as Map<String, dynamic>)['categories'] as List<dynamic>? ?? [];
+    return [
+      for (final item in categories)
+        CategoryTotal.fromJson(item as Map<String, dynamic>),
+    ];
+  }
+
   Future<List<TransactionItem>> transactions({
     String? month,
     String? from,
     String? to,
     int? limit,
+    int? offset,
+    String? kind,
+    String? q,
   }) async {
     final params = <String>[
       if (month != null) 'month=$month',
       if (from != null) 'from=$from',
       if (to != null) 'to=$to',
       if (limit != null) 'limit=$limit',
+      if (offset != null && offset > 0) 'offset=$offset',
+      if (kind != null) 'kind=$kind',
+      if (q != null && q.trim().isNotEmpty)
+        'q=${Uri.encodeQueryComponent(q.trim().length > 40 ? q.trim().substring(0, 40) : q.trim())}',
     ];
     final query = params.isEmpty ? '' : '?${params.join('&')}';
     final body = await _send('GET', '/transactions$query');
@@ -670,6 +693,65 @@ class FinanceApi {
       for (final item in items)
         if (item is Map<String, dynamic>) AgentResult.fromJson(item),
     ];
+  }
+
+  Future<List<StatementLine>> previewStatement({
+    required String fileBase64,
+    required String mimeType,
+    required String accountId,
+    String? password,
+  }) async {
+    final Object? body;
+    try {
+      body = await _send(
+        'POST',
+        '/transactions/import',
+        body: {
+          'file': fileBase64,
+          'mimeType': mimeType,
+          'accountId': accountId,
+          if (password != null && password.isNotEmpty) 'password': password,
+        },
+        timeout: const Duration(seconds: 75),
+      );
+    } on TimeoutException {
+      throw FinanceException('The statement took too long to read');
+    } on http.ClientException catch (caught) {
+      throw FinanceException(caught.message);
+    }
+    final rows = body is Map<String, dynamic> ? body['rows'] : null;
+    final items = rows is List ? rows : const [];
+    return [
+      for (final item in items)
+        if (item is Map<String, dynamic>) StatementLine.fromJson(item),
+    ];
+  }
+
+  Future<int> commitStatement({
+    required String accountId,
+    required List<StatementLine> rows,
+  }) async {
+    final body = await _send(
+      'POST',
+      '/transactions/import/commit',
+      body: {
+        'accountId': accountId,
+        'items': [
+          for (final row in rows)
+            {
+              'accountId': accountId,
+              'categoryId': row.categoryId,
+              'amount': row.amount,
+              'kind': row.kind,
+              'occurredOn': row.occurredOn,
+              'note': row.note,
+            },
+        ],
+      },
+      timeout: const Duration(seconds: 60),
+    );
+    if (body is Map<String, dynamic>) return (body['saved'] as num?)?.toInt() ?? rows.length;
+    return rows.length;
   }
 
   Future<Object?> _send(

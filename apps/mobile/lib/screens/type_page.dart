@@ -11,8 +11,8 @@ import 'package:finance_track/money.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:finance_track/screens/bill_review.dart';
 import 'package:finance_track/screens/budgets_section.dart';
-import 'package:finance_track/screens/people_section.dart';
 import 'package:finance_track/screens/review_sheet.dart';
+import 'package:finance_track/screens/statement_review.dart';
 import 'package:finance_track/widgets/account_chip.dart';
 import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
 import 'package:flutter_native_contact_picker/model/contact.dart';
@@ -793,6 +793,7 @@ class _TypePageState extends State<TypePage>
   String? _error;
   var _saving = false;
   Uint8List? _billBytes;
+  var _billPdf = false;
   List<ParsedSpend>? _drafts;
   final _speech = SpeechToText();
   var _speechReady = false;
@@ -866,12 +867,57 @@ class _TypePageState extends State<TypePage>
       _payee = name;
       _error = null;
     });
-    await showDebtSheet(
-      context,
-      ledger: widget.ledger,
-      person: name,
-      type: 'lent',
-      accountId: _account()?.id,
+  }
+
+  List<ParsedSpend> _withPerson(List<ParsedSpend> drafts) {
+    final name = _payee?.trim();
+    if (name == null || name.isEmpty) return drafts;
+    return [
+      for (final draft in drafts)
+        draft.copyWith(
+          note: personPaymentNote(
+            name: name,
+            amount: draft.amount,
+            kind: draft.kind,
+            detail: draft.note,
+          ),
+          clearDebt: !looksLikeLoan(draft.note),
+        ),
+    ];
+  }
+
+  List<SpendLine> _spendLines(String text) {
+    final lines = parseSpendLines(text);
+    if (lines.isNotEmpty || _payee == null) return lines;
+    final amount = _loneAmount(text);
+    if (amount == null) return lines;
+    return [
+      SpendLine(
+        amount: amount,
+        reason: 'spend',
+        categoryName: 'Other',
+        kind: 'expense',
+        occurredOn: DateTime.now(),
+      ),
+    ];
+  }
+
+  int? _loneAmount(String text) {
+    final match = RegExp(
+      r'(?:₹|rs\.?)?\s*(\d[\d,]*(?:\.\d{1,2})?)',
+    ).firstMatch(text.toLowerCase());
+    if (match == null) return null;
+    return parseMoney(match.group(1)!.replaceAll(',', ''));
+  }
+
+  String _personNote(SpendLine spend) {
+    final name = _payee?.trim();
+    if (name == null || name.isEmpty) return spend.reason;
+    return personPaymentNote(
+      name: name,
+      amount: spend.amount,
+      kind: spend.kind,
+      detail: spend.reason,
     );
   }
 
@@ -1128,6 +1174,7 @@ class _TypePageState extends State<TypePage>
       if (_needsAiOnly(text)) return _needsAi(text);
       drafts = _localDrafts(text, account);
     }
+    drafts = _withPerson(drafts);
     if (!mounted) return null;
     if (drafts.isEmpty) {
       setState(() => _error = 'Type an amount, a space, then what it was for');
@@ -1159,7 +1206,7 @@ class _TypePageState extends State<TypePage>
     final account = mention.account ?? chosen;
     final categories = widget.ledger.categories;
     return [
-      for (final spend in parseSpendLines(mention.text))
+      for (final spend in _spendLines(mention.text))
         if (categoryFor(spend, categories) case final category?)
           ParsedSpend(
             amount: spend.amount,
@@ -1167,7 +1214,7 @@ class _TypePageState extends State<TypePage>
             occurredOn: isoDate(spend.occurredOn ?? DateTime.now()),
             categoryId: category.id,
             categoryName: category.name,
-            note: spend.reason,
+            note: _personNote(spend),
             accountId: account.id,
             accountName: account.name,
           ),
@@ -1176,6 +1223,17 @@ class _TypePageState extends State<TypePage>
 
   Future<String?> _saveWithAgent(String text, Account account) async {
     try {
+      if (_payee != null) {
+        final drafts = _withPerson(
+          await widget.ledger.previewText(text: text, accountId: account.id),
+        );
+        if (drafts.isEmpty) return null;
+        final saved = await widget.ledger.commitSpends(
+          items: drafts,
+          accountId: account.id,
+        );
+        return _messagesFor(saved);
+      }
       final saved = await widget.ledger.parseAndSave(
         text: text,
         accountId: account.id,
@@ -1238,7 +1296,7 @@ class _TypePageState extends State<TypePage>
       widget.ledger.bankFor,
     );
     final account = mention.account ?? chosen;
-    final spends = parseSpendLines(mention.text);
+    final spends = _spendLines(mention.text);
     if (spends.isEmpty) {
       setState(() => _error = 'Type an amount, a space, then what it was for');
       return null;
@@ -1255,7 +1313,7 @@ class _TypePageState extends State<TypePage>
         amount: spend.amount,
         kind: spend.kind,
         occurredOn: isoDate(spend.occurredOn ?? DateTime.now()),
-        note: spend.reason,
+        note: _personNote(spend),
       );
     }
     final where = _accountLabel(account.name);
@@ -1275,6 +1333,109 @@ class _TypePageState extends State<TypePage>
         ),
     ]);
     return [message, ...warnings].join('\n');
+  }
+
+  Future<List<StatementLine>?> _readStatement(Uint8List bytes, String mime, String accountId) async {
+    String? password;
+    while (mounted) {
+      try {
+        return await widget.ledger.previewStatement(
+          fileBase64: base64Encode(bytes),
+          mimeType: mime,
+          accountId: accountId,
+          password: password,
+        );
+      } on FinanceException catch (caught) {
+        final locked = caught.message.contains('locked') || caught.message.contains('did not open');
+        if (!locked) rethrow;
+        if (mounted) setState(() => _saving = false);
+        final entered = await _askStatementPassword(wrong: caught.message.contains('did not open'));
+        if (entered == null || !mounted) return null;
+        if (entered.isEmpty) continue;
+        password = entered;
+        setState(() => _saving = true);
+      }
+    }
+    return null;
+  }
+
+  Future<String?> _askStatementPassword({required bool wrong}) {
+    return showDialog<String>(
+      context: context,
+      builder: (context) => _StatementPasswordDialog(wrong: wrong),
+    );
+  }
+
+  Future<void> _letKeyboardClose() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    for (var attempt = 0; attempt < 8; attempt++) {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      if (MediaQuery.viewInsetsOf(context).bottom == 0) return;
+    }
+  }
+
+  Future<void> _importStatement() async {
+    if (_saving || _message != null) return;
+    final account = _account();
+    if (account == null) {
+      setState(() => _error = 'Add an account first');
+      return;
+    }
+    final file = await FilePicker.pickFile(
+      type: FileType.custom,
+      allowedExtensions: ['csv', 'pdf', 'txt', 'xlsx', 'xls'],
+    );
+    if (file == null || !mounted) return;
+    final bytes = await file.readAsBytes();
+    if (!mounted) return;
+    if (bytes.length > 4_500_000) {
+      setState(() => _error = 'That file is too large. Split it by month');
+      return;
+    }
+    final name = file.name.toLowerCase();
+    final mime = name.endsWith('.pdf')
+        ? 'application/pdf'
+        : name.endsWith('.xlsx')
+            ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            : name.endsWith('.xls')
+                ? 'application/vnd.ms-excel'
+                : 'text/csv';
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final rows = await _readStatement(bytes, mime, account.id);
+      if (!mounted || rows == null) return;
+      setState(() => _saving = false);
+      if (rows.isEmpty) {
+        setState(() => _error = 'No payments found in that statement');
+        return;
+      }
+      await _letKeyboardClose();
+      if (!mounted) return;
+      final saved = await Navigator.of(context).push<int>(
+        MaterialPageRoute<int>(
+          builder: (_) => StatementReview(
+            accountName: account.name,
+            rows: rows,
+            categories: widget.ledger.categories,
+            onSave: (chosen) => widget.ledger.commitStatement(accountId: account.id, rows: chosen),
+          ),
+        ),
+      );
+      if (!mounted || saved == null || saved == 0) return;
+      FocusScope.of(context).unfocus();
+      setState(() => _message = 'Saved $saved ${saved == 1 ? 'payment' : 'payments'}');
+      Celebration.play();
+      await _fill.forward();
+    } catch (caught) {
+      if (!mounted) return;
+      setState(() => _error = '$caught');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   Future<void> _scan() async {
@@ -1301,11 +1462,21 @@ class _TypePageState extends State<TypePage>
               title: const Text('Choose a PDF'),
               onTap: () => Navigator.pop(context, 'pdf'),
             ),
+            ListTile(
+              leading: const Icon(Icons.account_balance_outlined),
+              title: const Text('Bank statement'),
+              subtitle: const Text('CSV, Excel, or PDF'),
+              onTap: () => Navigator.pop(context, 'statement'),
+            ),
           ],
         ),
       ),
     );
     if (choice == null || !mounted) return;
+    if (choice == 'statement') {
+      await _importStatement();
+      return;
+    }
     if (choice == 'pdf') {
       final file = await FilePicker.pickFile(
         type: FileType.custom,
@@ -1349,6 +1520,8 @@ class _TypePageState extends State<TypePage>
     setState(() {
       _saving = true;
       _error = null;
+      _billBytes = keepPreview ? bytes : null;
+      _billPdf = !keepPreview;
     });
     try {
       final drafts = await widget.ledger.previewBill(
@@ -1399,6 +1572,7 @@ class _TypePageState extends State<TypePage>
       setState(() {
         _drafts = null;
         _billBytes = null;
+        _billPdf = false;
         _message = spendMessages([
           for (final draft in drafts)
             SpendLine(
@@ -1466,6 +1640,7 @@ class _TypePageState extends State<TypePage>
         onCancel: () => setState(() {
           _drafts = null;
           _billBytes = null;
+          _billPdf = false;
           _error = null;
         }),
         onSave: _saveBill,
@@ -1488,7 +1663,47 @@ class _TypePageState extends State<TypePage>
                       ? const SizedBox.shrink()
                       : Column(
                           mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
+                            if (_billBytes != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 20),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(18),
+                                  child: ColoredBox(
+                                    color: const Color(0xFF1C1C1E),
+                                    child: Image.memory(
+                                      _billBytes!,
+                                      height: 160,
+                                      fit: BoxFit.contain,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            else if (_billPdf)
+                              Container(
+                                height: 96,
+                                margin: const EdgeInsets.only(bottom: 20),
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1C1C1E),
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                child: const Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.picture_as_pdf_outlined,
+                                      color: Colors.white,
+                                    ),
+                                    SizedBox(height: 6),
+                                    Text(
+                                      'PDF bill',
+                                      style: TextStyle(color: Color(0xFF8E8E93)),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             SizedBox(
                               height: 88,
                               child: Align(
@@ -1659,6 +1874,9 @@ class _TypePageState extends State<TypePage>
                     child: _PayChip(
                       name: _payee,
                       onTap: _saving ? null : _paySomeone,
+                      onClear: _saving || _payee == null
+                          ? null
+                          : () => setState(() => _payee = null),
                     ),
                   ),
                 ),
@@ -1680,20 +1898,82 @@ class _TypePageState extends State<TypePage>
   }
 }
 
-class _PayChip extends StatelessWidget {
-  const _PayChip({required this.name, required this.onTap});
+class _StatementPasswordDialog extends StatefulWidget {
+  const _StatementPasswordDialog({required this.wrong});
 
-  final String? name;
-  final VoidCallback? onTap;
+  final bool wrong;
+
+  @override
+  State<_StatementPasswordDialog> createState() => _StatementPasswordDialogState();
+}
+
+class _StatementPasswordDialogState extends State<_StatementPasswordDialog> {
+  final _password = TextEditingController();
+
+  @override
+  void dispose() {
+    _password.dispose();
+    super.dispose();
+  }
+
+  void _close([String? value]) {
+    FocusManager.instance.primaryFocus?.unfocus();
+    Navigator.pop(context, value);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final label = name ?? 'Pay someone';
+    return AlertDialog(
+      backgroundColor: const Color(0xFF2C2C2E),
+      title: const Text('Unlock statement'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.wrong
+                ? 'That password did not open it. Try the one from your bank.'
+                : 'This PDF is locked. Enter the password from your bank.',
+            style: const TextStyle(color: Color(0xFF8E8E93)),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _password,
+            autofocus: true,
+            obscureText: true,
+            style: const TextStyle(color: Colors.white),
+            cursorColor: Colors.white,
+            decoration: const InputDecoration(
+              hintText: 'Password',
+              hintStyle: TextStyle(color: Color(0xFF5C5C60)),
+            ),
+            onSubmitted: (value) => _close(value.trim()),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => _close(), child: const Text('Cancel')),
+        TextButton(onPressed: () => _close(_password.text.trim()), child: const Text('Unlock')),
+      ],
+    );
+  }
+}
+
+class _PayChip extends StatelessWidget {
+  const _PayChip({required this.name, required this.onTap, required this.onClear});
+
+  final String? name;
+  final VoidCallback? onTap;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = name ?? 'Send to';
     return Semantics(
       button: true,
       label: name == null
-          ? 'Pay someone, tap to choose a contact'
-          : 'Paying $name, tap to choose another contact',
+          ? 'Send to a contact, tap to choose'
+          : 'Sending to $name, tap to choose another contact',
       child: Material(
         color: const Color(0xFF1C1C1E),
         shape: const StadiumBorder(side: BorderSide(color: Color(0xFF3A3A3C))),
@@ -1721,11 +2001,21 @@ class _PayChip extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  const Icon(
-                    LucideIcons.chevronDown,
-                    color: Color(0xFF8E8E93),
-                    size: 18,
-                  ),
+                  if (onClear == null)
+                    const Icon(
+                      LucideIcons.chevronDown,
+                      color: Color(0xFF8E8E93),
+                      size: 18,
+                    )
+                  else
+                    IconButton(
+                      tooltip: 'Clear contact',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                      onPressed: onClear,
+                      icon: const Icon(LucideIcons.x, color: Color(0xFF8E8E93), size: 16),
+                    ),
                 ],
               ),
             ),

@@ -10,6 +10,8 @@ import { TransactionsModule } from '../transactions/transactions.module.js';
 import { AgentController } from './agent.controller.js';
 import { AIAgentService } from './ai-agent.service.js';
 import { LlmClient } from './llm.client.js';
+import { StatementController } from './statement.controller.js';
+import { StatementService } from './statement.service.js';
 import { VisionClient } from './vision.client.js';
 import { ZeroShotClient } from './zero-shot.client.js';
 
@@ -24,8 +26,8 @@ import { ZeroShotClient } from './zero-shot.client.js';
     DebtsModule,
     GoalsModule,
   ],
-  controllers: [AgentController],
-  providers: [AIAgentService, LlmClient, VisionClient, ZeroShotClient],
+  controllers: [AgentController, StatementController],
+  providers: [AIAgentService, LlmClient, VisionClient, ZeroShotClient, StatementService],
   exports: [LlmClient],
 })
 export class AgentModule {}

@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:finance_track/api/finance_api.dart';
 import 'package:finance_track/ledger.dart';
 import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
 import 'package:finance_track/screens/transaction_form_screen.dart';
 import 'package:finance_track/widgets/category_icon.dart';
+import 'package:finance_track/widgets/pull_refresh.dart';
 import 'package:finance_track/widgets/shimmer.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -26,6 +29,10 @@ class _SearchScreenState extends State<SearchScreen> {
   List<TransactionItem> _items = [];
   Object? _error;
   var _loading = true;
+  var _loadingMore = false;
+  var _hasMore = false;
+  var _request = 0;
+  Timer? _typing;
 
   @override
   void initState() {
@@ -35,22 +42,38 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   void dispose() {
+    _typing?.cancel();
     _query.dispose();
     super.dispose();
   }
 
+  String? get _needle {
+    final text = _query.text.trim();
+    return text.isEmpty ? null : text;
+  }
+
   Future<void> _load() async {
+    final request = ++_request;
+    final needle = _needle;
+    setState(() {
+      _loading = _items.isEmpty;
+      _error = null;
+    });
     try {
-      final items = await widget.ledger.api.transactions(limit: 500);
-      if (!mounted) return;
+      final items = await widget.ledger.api.transactions(
+        limit: transactionPageSize,
+        q: needle,
+      );
+      if (!mounted || request != _request) return;
       setState(() {
         _items = items;
+        _hasMore = items.length == transactionPageSize;
         _loading = false;
       });
     } on AuthExpiredException {
       await widget.ledger.onUnauthorized?.call();
     } catch (caught) {
-      if (!mounted) return;
+      if (!mounted || request != _request) return;
       setState(() {
         _error = caught;
         _loading = false;
@@ -58,10 +81,41 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
+  Future<void> _loadMore() async {
+    if (_loading || _loadingMore || !_hasMore) return;
+    final request = _request;
+    final needle = _needle;
+    setState(() => _loadingMore = true);
+    try {
+      final items = await widget.ledger.api.transactions(
+        limit: transactionPageSize,
+        offset: _items.length,
+        q: needle,
+      );
+      if (!mounted || request != _request) return;
+      setState(() {
+        _items = [..._items, ...items];
+        _hasMore = items.length == transactionPageSize;
+        _loadingMore = false;
+      });
+    } on AuthExpiredException {
+      await widget.ledger.onUnauthorized?.call();
+    } catch (_) {
+      if (!mounted || request != _request) return;
+      setState(() => _loadingMore = false);
+    }
+  }
+
+  void _onQueryChanged(String _) {
+    _typing?.cancel();
+    _typing = Timer(const Duration(milliseconds: 250), _load);
+    setState(() {});
+  }
+
   void _search(String text) {
     _query.text = text;
     _query.selection = TextSelection.collapsed(offset: text.length);
-    setState(() {});
+    _onQueryChanged(text);
   }
 
   void _open(TransactionItem transaction) {
@@ -75,20 +129,23 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     final query = _query.text.trim().toLowerCase();
-    final matches = query.isEmpty
-        ? _items
-        : _items.where((item) {
-            final note = item.note?.toLowerCase() ?? '';
-            return item.categoryName.toLowerCase().contains(query) ||
-                item.accountName.toLowerCase().contains(query) ||
-                note.contains(query);
-          }).toList();
+    final matches = _items;
     return Scaffold(
       appBar: AppBar(),
       body: _loading
           ? const ShimmerRows()
           : _error != null
-          ? Center(child: Text('$_error', textAlign: TextAlign.center))
+          ? PullRefresh(
+              onRefresh: _load,
+              child: ListView(
+                physics: pullPhysics,
+                padding: const EdgeInsets.all(24),
+                children: [
+                  const SizedBox(height: 120),
+                  Text('$_error', textAlign: TextAlign.center),
+                ],
+              ),
+            )
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -110,31 +167,61 @@ class _SearchScreenState extends State<SearchScreen> {
                         borderSide: BorderSide.none,
                       ),
                     ),
-                    onChanged: (_) => setState(() {}),
+                    onChanged: _onQueryChanged,
                   ),
                 ),
                 Expanded(
-                  child: query.isEmpty
-                      ? _Discover(
-                          top: _topSpend(),
-                          latest: _items.isEmpty ? null : _items.first,
-                          chips: _popular(),
-                          onSearch: _search,
-                          onOpen: _open,
-                        )
-                      : matches.isEmpty
-                      ? const Center(
-                          child: Text('No matches', style: TextStyle(color: _muted, fontSize: 16)),
-                        )
-                      : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-                          itemCount: matches.length,
-                          separatorBuilder: (context, index) => const SizedBox(height: 10),
-                          itemBuilder: (context, index) => _ResultCard(
-                            transaction: matches[index],
-                            onTap: () => _open(matches[index]),
+                  child: PullRefresh(
+                    onRefresh: _load,
+                    child: query.isEmpty
+                        ? _Discover(
+                            top: _topSpend(),
+                            latest: _items.isEmpty ? null : _items.first,
+                            chips: _popular(),
+                            onSearch: _search,
+                            onOpen: _open,
+                          )
+                        : matches.isEmpty
+                        ? ListView(
+                            physics: pullPhysics,
+                            children: const [
+                              SizedBox(height: 160),
+                              Center(
+                                child: Text('No matches', style: TextStyle(color: _muted, fontSize: 16)),
+                              ),
+                            ],
+                          )
+                        : NotificationListener<ScrollNotification>(
+                            onNotification: (notice) {
+                              if (_nearEnd(notice)) _loadMore();
+                              return false;
+                            },
+                            child: ListView.separated(
+                            physics: pullPhysics,
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                            itemCount: matches.length + (_loadingMore ? 1 : 0),
+                            separatorBuilder: (context, index) => const SizedBox(height: 10),
+                            itemBuilder: (context, index) {
+                              if (index >= matches.length) {
+                                return const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 12),
+                                  child: Center(
+                                    child: SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: _lime),
+                                    ),
+                                  ),
+                                );
+                              }
+                              return _ResultCard(
+                                transaction: matches[index],
+                                onTap: () => _open(matches[index]),
+                              );
+                            },
+                            ),
                           ),
-                        ),
+                  ),
                 ),
               ],
             ),
@@ -185,6 +272,7 @@ class _Discover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
+      physics: pullPhysics,
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
       children: [
         if (top != null || latest != null)
@@ -350,4 +438,10 @@ class _FeatureCard extends StatelessWidget {
       ),
     );
   }
+}
+
+bool _nearEnd(ScrollNotification notice) {
+  if (notice.metrics.axis != Axis.vertical) return false;
+  if (notice is! ScrollUpdateNotification && notice is! ScrollEndNotification) return false;
+  return notice.metrics.maxScrollExtent > 0 && notice.metrics.extentAfter < 480;
 }

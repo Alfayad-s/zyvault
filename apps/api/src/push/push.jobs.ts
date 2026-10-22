@@ -62,6 +62,9 @@ export class PushJobs implements OnModuleInit, OnModuleDestroy {
           this.logger.warn(`Push run failed for a user: ${String(caught)}`);
         }
       }
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : String(caught);
+      this.logger.warn(`Push run skipped: ${message}`);
     } finally {
       this.running = false;
     }

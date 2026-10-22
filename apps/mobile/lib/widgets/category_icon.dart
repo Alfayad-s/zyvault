@@ -69,8 +69,10 @@ class CategoryIcon extends StatelessWidget {
         fit: BoxFit.contain,
         filterQuality: FilterQuality.medium,
         semanticLabel: name.isEmpty ? key : name,
-        frameBuilder: (context, child, frame, synchronous) =>
-            frame == null && !synchronous ? const SizedBox.expand() : child,
+        frameBuilder: (context, child, frame, synchronous) {
+          if (synchronous || frame != null) return child;
+          return Stack(alignment: Alignment.center, children: [fallback, Opacity(opacity: 0, child: child)]);
+        },
         errorBuilder: (context, error, stackTrace) =>
             OverflowBox(maxWidth: size, maxHeight: size, child: fallback),
       ),

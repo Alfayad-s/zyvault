@@ -7,9 +7,15 @@ import 'package:finance_track/screens/type_page.dart';
 import 'package:finance_track/widgets/bank_logo.dart';
 import 'package:finance_track/widgets/category_icon.dart';
 import 'package:finance_track/widgets/operations_card.dart';
+import 'package:finance_track/widgets/pull_refresh.dart';
 import 'package:finance_track/widgets/shimmer.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+
+bool _isCurrentMonth(DateTime month) {
+  final today = DateTime.now();
+  return month.year == today.year && month.month == today.month;
+}
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({
@@ -39,23 +45,23 @@ class HomeScreen extends StatelessWidget {
           return const _HomeShimmer();
         }
         if (summary == null) {
-          return Center(
-            child: Padding(
+          return PullRefresh(
+            onRefresh: ledger.refresh,
+            child: ListView(
+              physics: pullPhysics,
               padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _errorText(ledger.error),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: ledger.loading ? null : ledger.refresh,
-                    child: const Text('Try again'),
-                  ),
-                ],
-              ),
+              children: [
+                const SizedBox(height: 120),
+                Text(
+                  _errorText(ledger.error),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: ledger.loading ? null : ledger.refresh,
+                  child: const Text('Try again'),
+                ),
+              ],
             ),
           );
         }
@@ -70,7 +76,12 @@ class HomeScreen extends StatelessWidget {
           onOpenRecords: onOpenRecords,
           onOpenTransaction: onOpenTransaction,
           onRefresh: ledger.refresh,
+          onLoadMore: ledger.loadMoreTransactions,
+          loadingMore: ledger.loadingMore,
           onType: () => openTypePage(context, ledger),
+          viewedMonth: ledger.month,
+          onPreviousMonth: () => ledger.changeMonth(-1),
+          onNextMonth: _isCurrentMonth(ledger.month) ? null : () => ledger.changeMonth(1),
           goals: GoalsStrip(ledger: ledger),
           budgets: BudgetsCard(ledger: ledger),
           nextPayment: ledger.nextPayment,
@@ -91,6 +102,8 @@ class HomeView extends StatelessWidget {
     this.onOpenRecords,
     this.onOpenTransaction,
     required this.onRefresh,
+    this.onLoadMore,
+    this.loadingMore = false,
     this.now,
     this.onType,
     this.accounts = const [],
@@ -100,6 +113,9 @@ class HomeView extends StatelessWidget {
     this.budgets,
     this.nextPayment,
     this.onOpenScheduled,
+    this.viewedMonth,
+    this.onPreviousMonth,
+    this.onNextMonth,
   });
 
   final Summary summary;
@@ -116,7 +132,12 @@ class HomeView extends StatelessWidget {
   final VoidCallback? onOpenRecords;
   final ValueChanged<TransactionItem>? onOpenTransaction;
   final Future<void> Function() onRefresh;
+  final VoidCallback? onLoadMore;
+  final bool loadingMore;
   final DateTime? now;
+  final DateTime? viewedMonth;
+  final VoidCallback? onPreviousMonth;
+  final VoidCallback? onNextMonth;
   final VoidCallback? onType;
 
   @override
@@ -126,9 +147,15 @@ class HomeView extends StatelessWidget {
         final velocity = details.primaryVelocity ?? 0;
         if (velocity > 300) onType?.call();
       },
-      child: RefreshIndicator(
+      child: PullRefresh(
         onRefresh: onRefresh,
-        child: ListView(
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (notice) {
+            if (_nearEnd(notice)) onLoadMore?.call();
+            return false;
+          },
+          child: ListView(
+          physics: pullPhysics,
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
           children: [
             const SizedBox(height: 8),
@@ -139,12 +166,15 @@ class HomeView extends StatelessWidget {
               onSend: onSend,
               accounts: accounts,
               monthTransactions: monthTransactions,
+              accountChanges: {
+                for (final change in summary.accountChanges) change.accountId: change.change,
+              },
               bankFor: bankFor,
             ),
             const SizedBox(height: 16),
             _HomeShortcuts(
               summary: summary,
-              month: now ?? DateTime.now(),
+              month: viewedMonth ?? now ?? DateTime.now(),
               onSpending: onOpenRecords,
               nextPayment: nextPayment,
               onScheduled: onOpenScheduled,
@@ -152,18 +182,42 @@ class HomeView extends StatelessWidget {
             if (goals != null) ...[const SizedBox(height: 24), goals!],
             if (budgets != null) ...[const SizedBox(height: 16), budgets!],
             const SizedBox(height: 16),
+            if (onPreviousMonth != null)
+              _MonthSwitch(
+                month: viewedMonth ?? now ?? DateTime.now(),
+                onPrevious: onPreviousMonth!,
+                onNext: onNextMonth,
+              ),
             OperationsCard(
-              transactions: recent,
+              transactions: monthTransactions,
               now: now ?? DateTime.now(),
               onOpenRecords: onOpenRecords,
               onOpenTransaction: onOpenTransaction,
             ),
+            if (loadingMore)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFC8F57A)),
+                  ),
+                ),
+              ),
             const SizedBox(height: 72),
           ],
+          ),
         ),
       ),
     );
   }
+}
+
+bool _nearEnd(ScrollNotification notice) {
+  if (notice.metrics.axis != Axis.vertical) return false;
+  if (notice is! ScrollUpdateNotification && notice is! ScrollEndNotification) return false;
+  return notice.metrics.maxScrollExtent > 0 && notice.metrics.extentAfter < 480;
 }
 
 class _HomeShortcuts extends StatelessWidget {
@@ -469,6 +523,51 @@ class _LightTile extends StatelessWidget {
   }
 }
 
+class _MonthSwitch extends StatelessWidget {
+  const _MonthSwitch({
+    required this.month,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  final DateTime month;
+  final VoidCallback onPrevious;
+  final VoidCallback? onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final label = month.year == today.year ? _monthName(month) : '${_monthName(month)} ${month.year}';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'Previous month',
+            onPressed: onPrevious,
+            icon: const Icon(LucideIcons.chevronLeft, color: Colors.white),
+          ),
+          Expanded(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Next month',
+            onPressed: onNext,
+            icon: Icon(
+              LucideIcons.chevronRight,
+              color: onNext == null ? const Color(0xFF3A3A3C) : Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 String _monthName(DateTime date) {
   const months = [
     'January',
@@ -503,6 +602,7 @@ class BalanceCard extends StatefulWidget {
     required this.onSend,
     this.accounts = const [],
     this.monthTransactions = const [],
+    this.accountChanges = const {},
     this.bankFor,
   });
 
@@ -512,6 +612,7 @@ class BalanceCard extends StatefulWidget {
   final VoidCallback onSend;
   final List<Account> accounts;
   final List<TransactionItem> monthTransactions;
+  final Map<String, int> accountChanges;
   final Bank? Function(Account account)? bankFor;
 
   @override
@@ -538,6 +639,8 @@ class _BalanceCardState extends State<BalanceCard> {
     final balance = selected?.balance ?? widget.balance;
     final monthChange = selected == null
         ? widget.monthChange
+        : widget.accountChanges.containsKey(selected.id)
+        ? widget.accountChanges[selected.id]!
         : widget.monthTransactions
               .where((item) => item.accountId == selected.id)
               .fold(

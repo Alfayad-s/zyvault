@@ -60,6 +60,45 @@ String formatCompact(int minor) {
   return negative ? '-₹$body' : '₹$body';
 }
 
+/// Note saved when money is sent to, or received from, a chosen contact.
+String personPaymentNote({
+  required String name,
+  required int amount,
+  required String kind,
+  String? detail,
+}) {
+  final money = formatRupees(amount);
+  final sent = kind == 'income'
+      ? 'received $money from $name'
+      : 'sent $name $money';
+  final extra = paymentDetail(detail, name);
+  return extra == null ? sent : '$sent, $extra';
+}
+
+/// Drops a detail that only repeats the person or the words "I spent".
+String? paymentDetail(String? detail, String name) {
+  if (detail == null) return null;
+  var text = detail.trim().replaceAll(RegExp(r'\s+'), ' ');
+  if (text.isEmpty) return null;
+  final person = RegExp.escape(name.trim());
+  text = text
+      .replaceFirst(
+        RegExp('^sent\\s+(to\\s+)?$person\\b[\\s,₹\\d.]*', caseSensitive: false),
+        '',
+      )
+      .trim();
+  if (text.isEmpty) return null;
+  final lower = text.toLowerCase();
+  if (lower == name.trim().toLowerCase()) return null;
+  if (RegExp(
+    r'^(i\s+)?(spent|spend|spending|paid|pay|sent|expense|kharcha)$',
+    caseSensitive: false,
+  ).hasMatch(lower)) {
+    return null;
+  }
+  return text;
+}
+
 String formatRupees(int minor) {
   if (minor % 100 == 0) {
     return '₹${formatMoney(minor).split('.').first}';

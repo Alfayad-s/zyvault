@@ -3,6 +3,7 @@ import 'package:finance_track/ledger.dart';
 import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
 import 'package:finance_track/widgets/category_icon.dart';
+import 'package:finance_track/widgets/pull_refresh.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -272,7 +273,10 @@ class BudgetsScreen extends StatelessWidget {
             0,
             (sum, budget) => sum + budget.spent,
           );
-          return ListView(
+          return PullRefresh(
+            onRefresh: ledger.refresh,
+            child: ListView(
+            physics: pullPhysics,
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
             children: [
               if (budgets.isNotEmpty)
@@ -390,6 +394,7 @@ class BudgetsScreen extends StatelessWidget {
                 ),
               ),
             ],
+            ),
           );
         },
       ),

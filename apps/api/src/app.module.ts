@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AccountModule } from './account/account.module.js';
 import { AccountsModule } from './accounts/accounts.module.js';
 import { AgentModule } from './agent/agent.module.js';
 import { AppController } from './app.controller.js';
@@ -25,6 +26,7 @@ import { TransactionsModule } from './transactions/transactions.module.js';
     ConfigModule.forRoot({ isGlobal: true }),
     SupabaseModule,
     AuthModule,
+    AccountModule,
     AccountsModule,
     CategoriesModule,
     TransactionsModule,

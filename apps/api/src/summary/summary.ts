@@ -6,6 +6,12 @@ export type SignedAmount = {
 export type SummaryTransaction = SignedAmount & {
   categoryId: string;
   categoryName: string;
+  accountId?: string;
+};
+
+export type AccountChange = {
+  accountId: string;
+  change: number;
 };
 
 export type CategoryTotal = {
@@ -20,6 +26,7 @@ export type Summary = {
   monthIncome: number;
   monthExpense: number;
   categories: CategoryTotal[];
+  accountChanges: AccountChange[];
 };
 
 function signed(transaction: SignedAmount): number {
@@ -57,10 +64,18 @@ export function buildSummary(
     });
   }
 
+  const accounts = new Map<string, number>();
+  for (const transaction of month) {
+    if (!transaction.accountId) continue;
+    const signedAmount = signed(transaction);
+    accounts.set(transaction.accountId, (accounts.get(transaction.accountId) ?? 0) + signedAmount);
+  }
+
   return {
     balance,
     monthIncome,
     monthExpense,
     categories: [...totals.values()].sort((a, b) => b.total - a.total),
+    accountChanges: [...accounts.entries()].map(([accountId, change]) => ({ accountId, change })),
   };
 }

@@ -25,9 +25,10 @@ describe('VisionClient', () => {
     );
     vi.stubGlobal('fetch', fetch);
 
-    await expect(client('vision-key').read({ mimeType: 'image/jpeg', data: 'abc' })).resolves.toBe(
-      'Milk 40\nBread 30',
-    );
+    await expect(client('vision-key').read({ mimeType: 'image/jpeg', data: 'abc' })).resolves.toEqual({
+      text: 'Milk 40\nBread 30',
+      lines: ['Milk 40', 'Bread 30'],
+    });
 
     const [url, init] = fetch.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('https://vision.googleapis.com/v1/images:annotate');
@@ -59,9 +60,10 @@ describe('VisionClient', () => {
       ),
     );
 
-    await expect(client('vision-key').read({ mimeType: 'application/pdf', data: 'pdf' })).resolves.toBe(
-      'Page one milk 40\nPage two bread 30',
-    );
+    await expect(client('vision-key').read({ mimeType: 'application/pdf', data: 'pdf' })).resolves.toEqual({
+      text: 'Page one milk 40\nPage two bread 30',
+      lines: ['Page one milk 40', 'Page two bread 30'],
+    });
     const init = vi.mocked(fetch).mock.calls[0]?.[1] as RequestInit;
     const body = JSON.parse(init.body as string) as { requests: { pages: number[] }[] };
     expect(body.requests[0]?.pages).toEqual([1, 2, 3, 4, 5]);
@@ -70,7 +72,10 @@ describe('VisionClient', () => {
   it('skips photo types Vision does not read', async () => {
     const fetch = vi.fn();
     vi.stubGlobal('fetch', fetch);
-    await expect(client('vision-key').read({ mimeType: 'image/heic', data: 'abc' })).resolves.toBe('');
+    await expect(client('vision-key').read({ mimeType: 'image/heic', data: 'abc' })).resolves.toEqual({
+      text: '',
+      lines: [],
+    });
     expect(fetch).not.toHaveBeenCalled();
   });
 

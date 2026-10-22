@@ -7,6 +7,8 @@ import 'package:finance_track/widgets/category_icon.dart';
 import 'package:finance_track/widgets/shimmer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
+import 'package:flutter_native_contact_picker/model/contact.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 const _card = Color(0xFF2C2C2E);
@@ -40,6 +42,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   late DateTime _date;
   String? _accountId;
   String? _categoryId;
+  String? _person;
+  String? _personNote;
   var _busy = false;
   String? _error;
 
@@ -57,11 +61,13 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     _categoryId = existing?.categoryId;
     _accountId = existing?.accountId ?? _defaultAccount()?.id;
     _date = existing == null ? _today() : DateTime.parse(existing.occurredOn);
+    _amount.addListener(_syncPersonNote);
     if (existing == null) _useSavedDefault();
   }
 
   @override
   void dispose() {
+    _amount.removeListener(_syncPersonNote);
     _amount.dispose();
     _note.dispose();
     super.dispose();
@@ -121,6 +127,33 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       .where((category) => category.kind == _kind)
       .toList();
 
+  Category? get _selectedCategory {
+    for (final category in _categories) {
+      if (category.id == _categoryId) return category;
+    }
+    return null;
+  }
+
+  Future<void> _chooseCategory() async {
+    final picked = await showModalBottomSheet<Category>(
+      context: context,
+      backgroundColor: const Color(0xFF161616),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => _CategoryPicker(
+        categories: _categories,
+        selectedId: _categoryId,
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _categoryId = picked.id;
+      _error = null;
+    });
+  }
+
   void _setKind(String kind) {
     if (kind == _kind) return;
     setState(() {
@@ -128,6 +161,48 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       _categoryId = null;
       _error = null;
     });
+    _syncPersonNote(force: _note.text.isEmpty || _note.text == _personNote);
+  }
+
+  Future<void> _choosePerson() async {
+    if (_busy) return;
+    final Contact? contact;
+    try {
+      contact = await FlutterNativeContactPicker().selectContact();
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not open contacts');
+      return;
+    }
+    if (!mounted || contact == null) return;
+    final name = contact.fullName?.trim() ?? '';
+    if (name.isEmpty) {
+      setState(() => _error = 'That contact has no name');
+      return;
+    }
+    setState(() {
+      _person = name;
+      _error = null;
+    });
+    _syncPersonNote(force: _note.text.trim().isEmpty || _note.text == _personNote);
+  }
+
+  void _clearPerson() {
+    final auto = _note.text == _personNote;
+    setState(() => _person = null);
+    _personNote = null;
+    if (auto) _note.clear();
+  }
+
+  void _syncPersonNote({bool force = false}) {
+    final name = _person;
+    if (name == null) return;
+    if (!force && _note.text.isNotEmpty && _note.text != _personNote) return;
+    final amount = parseMoney(_amount.text.replaceAll(',', ''));
+    final next = amount == null
+        ? (_kind == 'income' ? 'received from $name' : 'sent $name')
+        : personPaymentNote(name: name, amount: amount, kind: _kind, detail: force ? null : _note.text);
+    _personNote = next;
+    if (_note.text != next) _note.text = next;
   }
 
   Future<void> _pickDate() async {
@@ -283,20 +358,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           const SizedBox(height: 32),
           const _Label('Category'),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              for (final category in _categories)
-                _CategoryChip(
-                  category: category,
-                  selected: category.id == _categoryId,
-                  onTap: () => setState(() {
-                    _categoryId = category.id;
-                    _error = null;
-                  }),
-                ),
-            ],
+          _CategoryButton(
+            category: _selectedCategory,
+            onTap: _busy ? null : _chooseCategory,
           ),
           const SizedBox(height: 28),
           const _Label('Date'),
@@ -305,6 +369,14 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             date: _date,
             onChanged: (date) => setState(() => _date = date),
             onPick: _pickDate,
+          ),
+          const SizedBox(height: 28),
+          const _Label('Person'),
+          const SizedBox(height: 12),
+          _PersonButton(
+            name: _person,
+            onTap: _busy ? null : _choosePerson,
+            onClear: _busy || _person == null ? null : _clearPerson,
           ),
           const SizedBox(height: 28),
           const _Label('Note'),
@@ -514,50 +586,180 @@ class _AmountField extends StatelessWidget {
   }
 }
 
-class _CategoryChip extends StatelessWidget {
-  const _CategoryChip({
-    required this.category,
-    required this.selected,
-    required this.onTap,
-  });
+class _PersonButton extends StatelessWidget {
+  const _PersonButton({required this.name, required this.onTap, required this.onClear});
 
-  final Category category;
-  final bool selected;
-  final VoidCallback onTap;
+  final String? name;
+  final VoidCallback? onTap;
+  final VoidCallback? onClear;
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      selected: selected,
-      child: GestureDetector(
+    return Material(
+      color: _field,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: _line),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
-          decoration: BoxDecoration(
-            color: selected ? _lime.withValues(alpha: 0.12) : _card,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: selected ? _lime : Colors.transparent,
-              width: 1.5,
-            ),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              CategoryIcon(name: category.name, kind: category.kind, size: 32),
-              const SizedBox(width: 10),
-              Text(
-                category.name,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              const Icon(LucideIcons.contact, color: _muted, size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  name ?? 'Choose a contact',
+                  style: TextStyle(
+                    color: name == null ? const Color(0xFF5C5C60) : Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
+              if (onClear == null)
+                const Icon(LucideIcons.chevronDown, color: _muted, size: 18)
+              else
+                IconButton(
+                  tooltip: 'Clear contact',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onClear,
+                  icon: const Icon(LucideIcons.x, color: _muted, size: 18),
+                ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _CategoryButton extends StatelessWidget {
+  const _CategoryButton({required this.category, required this.onTap});
+
+  final Category? category;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final category = this.category;
+    return Material(
+      color: _field,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: _line),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+          child: Row(
+            children: [
+              if (category == null)
+                const Icon(LucideIcons.shapes, color: _muted, size: 22)
+              else
+                CategoryIcon(name: category.name, kind: category.kind, size: 36),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  category?.name ?? 'Choose a category',
+                  style: TextStyle(
+                    color: category == null ? const Color(0xFF5C5C60) : Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const Icon(LucideIcons.chevronDown, color: _muted, size: 18),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryPicker extends StatelessWidget {
+  const _CategoryPicker({required this.categories, required this.selectedId});
+
+  final List<Category> categories;
+  final String? selectedId;
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.55,
+      minChildSize: 0.35,
+      maxChildSize: 0.9,
+      builder: (context, controller) => Column(
+        children: [
+          const SizedBox(height: 10),
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(color: _line, borderRadius: BorderRadius.circular(2)),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Category',
+                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+          Expanded(
+            child: GridView.builder(
+              controller: controller,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                mainAxisExtent: 96,
+              ),
+              itemCount: categories.length,
+              itemBuilder: (context, index) {
+                final category = categories[index];
+                final selected = category.id == selectedId;
+                return Material(
+                  color: selected ? _lime.withValues(alpha: 0.14) : _card,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    side: BorderSide(color: selected ? _lime : Colors.transparent, width: 1.5),
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: () => Navigator.of(context).pop(category),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CategoryIcon(name: category.name, kind: category.kind, size: 40),
+                        const SizedBox(height: 6),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            category.name,
+                            maxLines: 2,
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.15),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
