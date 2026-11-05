@@ -311,6 +311,404 @@ h1 {
   text-align: left;
 }
 
+.prose.install {
+  max-width: 980px;
+}
+
+.install h1 {
+  margin: 8px 0 0;
+  font-size: clamp(40px, 5vw, 56px);
+  letter-spacing: -0.045em;
+  line-height: 1.05;
+}
+
+.plans {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  align-items: stretch;
+  margin-top: 36px;
+}
+
+.plan {
+  display: flex;
+  flex-direction: column;
+  padding: 26px 24px 22px;
+  border: 1px solid #e7e9f0;
+  border-radius: 18px;
+  background: #fff;
+}
+
+.plan.on {
+  box-shadow: 0 0 0 2px #16181d;
+}
+
+.plan.alerts {
+  background: #16181d;
+  color: #fff;
+  border-color: #16181d;
+}
+
+.plan.alerts.on {
+  box-shadow: 0 18px 40px rgba(22, 24, 29, 0.18);
+}
+
+.plan-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.plan h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.plan-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #c6f54a;
+  color: #172006;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.plan-price {
+  margin: 22px 0 0;
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.plan-blurb {
+  min-height: 48px;
+  margin: 14px 0 0;
+  color: #6d7280;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.plan.alerts .plan-blurb,
+.plan.alerts .plan-lead,
+.plan.alerts .plan-features > p:first-child {
+  color: #c8ccd4;
+}
+
+.plan-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.plan-btn {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 13px 16px;
+  border: 0;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.plan-btn.dark {
+  background: #1c1e24;
+  color: #fff;
+}
+
+.plan-btn.lime {
+  background: #c6f54a;
+  color: #172006;
+}
+
+.plan-btn.line {
+  background: #fff;
+  color: #16181d;
+}
+
+.plan-features {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #eceef3;
+}
+
+.plan.alerts .plan-features {
+  border-top-color: rgba(255, 255, 255, 0.12);
+}
+
+.install .plan-features > p:first-child {
+  margin: 0;
+  color: #8b909c;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.install .plan p {
+  margin: 0;
+  color: inherit;
+}
+
+.install .plan-features > p:first-child {
+  color: #8b909c;
+}
+
+.install .plan.alerts .plan-features > p:first-child {
+  color: #b7bcc6;
+}
+
+.install .plan-points,
+.install .step-taps {
+  padding-left: 0;
+}
+
+.install .plan-price {
+  margin-top: 22px;
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.install .plan-blurb {
+  margin-top: 14px;
+  color: #6d7280;
+  font-size: 15px;
+}
+
+.install .plan-points li,
+.install .step-taps li {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.install .plan-points.light li {
+  color: #fff;
+}
+
+.install .plan.alerts .plan-blurb,
+.install .plan.alerts .plan-lead {
+  color: #c8ccd4;
+}
+
+.plan-lead {
+  margin: 8px 0 0;
+  color: #6d7280;
+  font-size: 14px;
+}
+
+.install .plan-note {
+  color: var(--ink);
+}
+
+.plan-points {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan-points li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0 0;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.plan-points.light li {
+  color: #fff;
+}
+
+.plan-points span {
+  display: grid;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  margin-top: 1px;
+  border-radius: 999px;
+  background: #c6f54a;
+}
+
+.plan-points svg {
+  width: 12px;
+  height: 12px;
+  fill: #172006;
+}
+
+.plan-note {
+  margin: 16px 0 0;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: #f7f8fc;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.plan-steps {
+  margin-top: 36px;
+  scroll-margin-top: 18px;
+}
+
+.plan-steps-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.plan-steps-head h2 {
+  margin: 0;
+  font-size: clamp(28px, 3vw, 36px);
+  letter-spacing: -0.04em;
+}
+
+.plan-steps-head p {
+  max-width: 420px;
+  margin: 8px 0 0;
+}
+
+.plan-steps-head .cta {
+  flex: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.step-taps {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step-taps li {
+  margin: 6px 0 0;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.step-taps li::before {
+  content: "→ ";
+  color: #8b909c;
+  font-weight: 700;
+}
+
+.install-actions button.cta {
+  font: inherit;
+  cursor: pointer;
+}
+
+.install-actions .cta svg,
+.cta svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.step-icon {
+  position: relative;
+  display: grid;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--lime);
+}
+
+.step-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: #172006;
+}
+
+.step-icon b {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 999px;
+  background: #172006;
+  color: #fff;
+  font-size: 11px;
+}
+
+.step-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step-marks li {
+  margin: 0;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: #f4f5fb;
+  color: #172006;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.guide {
+  margin: 28px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.guide > li {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-top: 14px;
+  padding: 18px;
+  border: 1px solid #f0f1f6;
+  border-radius: 22px;
+}
+
+.guide > li > span:not(.step-icon) {
+  display: grid;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--lime);
+  color: #172006;
+  font-weight: 800;
+}
+
+.guide h2 {
+  margin: 4px 0 0;
+  font-size: 18px;
+  letter-spacing: -0.03em;
+}
+
+.guide p {
+  margin: 8px 0 0;
+}
+
+.print-only {
+  display: none;
+}
+
 .prose.legal h2 {
   margin-top: 32px;
   font-size: 22px;
@@ -370,6 +768,44 @@ footer nav {
   gap: 18px;
 }
 
+@media print {
+  .nav,
+  footer,
+  .no-print {
+    display: none !important;
+  }
+
+  .shell {
+    padding: 0;
+  }
+
+  .prose {
+    max-width: none;
+    padding-top: 0;
+  }
+
+  .print-only {
+    display: block;
+    margin-top: 8px;
+    color: #16181d;
+    font-size: 14px;
+  }
+
+  .plan-steps,
+  .plan-steps.wait {
+    display: block !important;
+  }
+
+  .plans,
+  .plan-note {
+    display: none !important;
+  }
+
+  .guide > li {
+    break-inside: avoid;
+  }
+}
+
 @media (max-width: 760px) {
   .shell {
     padding: 16px 18px 24px;
@@ -384,8 +820,14 @@ footer nav {
   }
 
   .grid,
-  .steps {
+  .steps,
+  .plans {
     grid-template-columns: 1fr;
+  }
+
+  .plan-steps-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   footer {

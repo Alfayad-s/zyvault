@@ -2,9 +2,9 @@
   "name": "mobile",
   "private": true,
   "scripts": {
-    "dev": "flutter run",
+    "dev": "bash scripts/run.sh",
     "dev:device": "bash scripts/run-device.sh",
-    "build": "flutter build apk",
+    "build": "flutter build apk --flavor alerts --dart-define=UPI_ALERTS=true",
     "build:share": "bash scripts/share-apk.sh",
     "build:share:clean": "bash scripts/share-apk.sh --clean",
     "lint": "flutter analyze",

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:finance_track/api/finance_api.dart';
+import 'package:finance_track/build_flags.dart';
 import 'package:finance_track/app_lock.dart';
 import 'package:finance_track/ledger.dart';
 import 'package:finance_track/models.dart';
@@ -647,6 +648,7 @@ class _AlertSettingsState extends State<_AlertSettings> {
             activeThumbColor: const Color(0xFF17310C),
             activeTrackColor: const Color(0xFFC8F57A),
           ),
+          if (upiAlertsBuild)
           SwitchListTile(
             value: _apps,
             onChanged: _setApps,

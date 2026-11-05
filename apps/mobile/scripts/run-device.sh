@@ -50,4 +50,4 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MOBILE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 cd "$MOBILE_DIR"
-exec flutter run --dart-define=API_BASE_URL="$API_BASE_URL" "$@"
+exec flutter run --flavor alerts --dart-define=UPI_ALERTS=true --dart-define=API_BASE_URL="$API_BASE_URL" "$@"

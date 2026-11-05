@@ -7,7 +7,7 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: '/zyvault.apk',
+        source: '/:file(zyvault.apk|zyvault-basic.apk)',
         headers: [
           {
             key: 'Content-Type',
@@ -15,7 +15,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Disposition',
-            value: 'attachment; filename="zyvault.apk"',
+            value: 'attachment',
           },
         ],
       },

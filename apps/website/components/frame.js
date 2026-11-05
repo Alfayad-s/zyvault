@@ -12,8 +12,8 @@ export function Frame({ children }) {
             <a href="/about">About</a>
             <a href="/#faq">FAQ</a>
           </nav>
-          <a className="nav-btn" href="/zyvault.apk" download="zyvault.apk">
-            Download APK
+          <a className="nav-btn" href="/install">
+            Get the app
           </a>
         </header>
         <main>{children}</main>
@@ -24,6 +24,7 @@ export function Frame({ children }) {
           <nav aria-label="Footer">
             <a href="/about">About</a>
             <a href="/#faq">FAQ</a>
+            <a href="/install">Install</a>
             <a href="/privacy">Privacy</a>
             <a href="/terms">Terms</a>
             <a href="/llms.txt">Product facts</a>

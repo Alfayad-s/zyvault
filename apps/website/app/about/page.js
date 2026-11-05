@@ -58,12 +58,21 @@ export default function AboutPage() {
           <li>It does not hold, send or receive money. A payment still happens in your bank or UPI app.</li>
           <li>It does not connect to a bank with your login. Accounts are names and opening balances you enter.</li>
           <li>It does not read messages until you allow notification access.</li>
-          <li>It is an APK you install yourself. This site does not claim a Play Store listing.</li>
+          <li>
+            It is an APK you install yourself. This site does not claim a Play Store listing. The{' '}
+            <a className="text-link" href="/install">
+              install steps
+            </a>{' '}
+            shows the taps for payment alerts.
+          </li>
         </ul>
 
         <p>
-          <a className="cta" href="/zyvault.apk" download="zyvault.apk">
-            Download APK
+          <a className="cta" href="/zyvault-basic.apk" download="zyvault-basic.apk">
+            Basic app
+          </a>{' '}
+          <a className="cta ghost" href="/install">
+            App with payment alerts
           </a>
         </p>
       </article>

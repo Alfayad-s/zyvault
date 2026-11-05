@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:finance_track/api/finance_api.dart';
+import 'package:finance_track/build_flags.dart';
 import 'package:finance_track/app_lock.dart';
 import 'package:finance_track/home_screen_widget.dart';
 import 'package:finance_track/ledger.dart';
@@ -77,7 +78,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _startPolling();
     final watchSms = await SmsInbox.enabled();
     final watchApps = await SmsInbox.appsEnabled();
-    if (_upiAlerts == null && (watchSms || watchApps)) {
+    if (upiAlertsBuild && _upiAlerts == null && (watchSms || watchApps)) {
       _upiAlerts = SmsInbox.alerts.listen((alert) async {
         final added = await SmsInbox.storeAppAlert(alert);
         if (!added) return;

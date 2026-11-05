@@ -4,15 +4,17 @@ import 'package:finance_track/money.dart';
 import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
 
-/// The Android home-screen widget: balance, this month's spending, and
+/// The home-screen widget: balance, this month's spending, and
 /// Speak / Type buttons that open the type page.
 class HomeScreenWidget {
   static const _provider = 'FinanceWidgetProvider';
+  static const _iosKind = 'FinanceWidget';
+  static const _group = 'group.com.financetrack.financeTrack';
   static String? _shown;
 
   static bool get supported =>
       !kIsWeb &&
-      Platform.isAndroid &&
+      (Platform.isAndroid || Platform.isIOS) &&
       !Platform.environment.containsKey('FLUTTER_TEST');
 
   static ({String title, String balance, String spent}) texts({
@@ -54,10 +56,11 @@ class HomeScreenWidget {
     final key = '${shown.title}|${shown.balance}|${shown.spent}';
     if (key == _shown) return;
     try {
+      if (Platform.isIOS) await HomeWidget.setAppGroupId(_group);
       await HomeWidget.saveWidgetData<String>('widget_title', shown.title);
       await HomeWidget.saveWidgetData<String>('widget_balance', shown.balance);
       await HomeWidget.saveWidgetData<String>('widget_spent', shown.spent);
-      await HomeWidget.updateWidget(androidName: _provider);
+      await HomeWidget.updateWidget(androidName: _provider, iOSName: _iosKind);
       _shown = key;
     } catch (caught) {
       debugPrint('Home widget update failed: $caught');

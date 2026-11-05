@@ -98,7 +98,7 @@ export const faqs = [
   {
     question: 'Is zyvault on the Play Store?',
     answer:
-      'zyvault is an Android app you install from the APK offered on this site. It is not described here as a Play Store listing.',
+      'Not yet. Download it from this site. The basic app is the easy install. The payment alerts app needs a few extra taps. Those taps are on the Install page.',
   },
 ];
 
@@ -125,7 +125,7 @@ export function softwareJsonLd() {
         description: site.description,
         inLanguage: ['en', 'ml', 'hi'],
         featureList: features.map((item) => item.title),
-        downloadUrl: `${url}/zyvault.apk`,
+        downloadUrl: `${url}/zyvault-basic.apk`,
       },
       {
         '@type': 'FAQPage',
@@ -183,7 +183,9 @@ zyvault is a personal Android finance tracker for rupees. It is not a bank and i
 - Privacy: ${url}/privacy
 - Terms: ${url}/terms
 - Account deletion: ${url}/privacy#delete
-- APK: ${url}/zyvault.apk
+- APK without UPI alerts: ${url}/zyvault-basic.apk
+- APK with UPI alerts: ${url}/zyvault.apk
+- Install steps: ${url}/install
 
 ## What it does
 ${featureLines}

@@ -10,26 +10,31 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MOBILE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ROOT_DIR="$(cd "$MOBILE_DIR/../.." && pwd)"
 SHARE_DIR="$ROOT_DIR/share-apk"
-APK_NAME="finance-track-release.apk"
-BUILT_APK="$MOBILE_DIR/build/app/outputs/flutter-apk/app-release.apk"
-
-# Release APKs always call production. Ignore a local API_BASE_URL left in the shell.
+SITE_DIR="$ROOT_DIR/apps/website/public"
 API_BASE_URL="https://zyvault-production.up.railway.app"
 
-cd "$MOBILE_DIR"
-echo "Building release APK for $API_BASE_URL"
-flutter build apk --release --dart-define=API_BASE_URL="$API_BASE_URL"
+build_one() {
+  local flavor="$1"
+  local define="$2"
+  local name="$3"
+  local built="$MOBILE_DIR/build/app/outputs/flutter-apk/app-${flavor}-release.apk"
+  echo "Building $flavor APK for $API_BASE_URL"
+  flutter build apk --release --flavor "$flavor" --dart-define="UPI_ALERTS=$define" --dart-define=API_BASE_URL="$API_BASE_URL"
+  if [[ ! -f "$built" ]]; then
+    echo "APK not found at $built" >&2
+    exit 1
+  fi
+  cp "$built" "$SHARE_DIR/$name"
+  cp "$built" "$SITE_DIR/$name"
+  echo "Copied $name"
+}
 
-if [[ ! -f "$BUILT_APK" ]]; then
-  echo "APK not found at $BUILT_APK" >&2
-  exit 1
-fi
-
-mkdir -p "$SHARE_DIR"
-
+mkdir -p "$SHARE_DIR" "$SITE_DIR"
 if [[ "$CLEAN" -eq 1 ]]; then
   find "$SHARE_DIR" -maxdepth 1 -type f -name '*.apk' -delete
 fi
 
-cp "$BUILT_APK" "$SHARE_DIR/$APK_NAME"
-echo "APK copied to $SHARE_DIR/$APK_NAME"
+cd "$MOBILE_DIR"
+build_one alerts true zyvault.apk
+build_one basic false zyvault-basic.apk
+echo "APKs copied to $SHARE_DIR and $SITE_DIR"

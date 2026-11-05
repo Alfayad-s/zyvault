@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io' show Platform;
 
+import 'package:finance_track/build_flags.dart';
 import 'package:finance_track/sms/bank_sms.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart';
@@ -33,6 +34,7 @@ class SmsInbox {
     try {
       final preferences = await SharedPreferences.getInstance();
       if (!(preferences.getBool(_enabledKey) ?? false)) return false;
+      if (!upiAlertsBuild) return await Permission.sms.isGranted;
       return await NotificationListenerService.isPermissionGranted();
     } catch (_) {
       return false;
@@ -40,7 +42,7 @@ class SmsInbox {
   }
 
   static Future<bool> appsEnabled() async {
-    if (!supported) return false;
+    if (!supported || !upiAlertsBuild) return false;
     try {
       final preferences = await SharedPreferences.getInstance();
       if (!(preferences.getBool(_appsKey) ?? false)) return false;
@@ -52,9 +54,14 @@ class SmsInbox {
 
   static Future<String?> enable() async {
     if (!supported) return 'Reading bank SMS works only on Android';
-    final granted = await _notificationAccess();
-    if (!granted) {
-      return 'Turn on notification access for zyvault, then switch this on again';
+    if (upiAlertsBuild) {
+      final granted = await _notificationAccess();
+      if (!granted) {
+        return 'Turn on notification access for zyvault, then switch this on again';
+      }
+    } else {
+      final status = await Permission.sms.request();
+      if (!status.isGranted) return 'Allow SMS so bank texts can be read on this phone';
     }
     try {
       final preferences = await SharedPreferences.getInstance();
@@ -76,6 +83,7 @@ class SmsInbox {
   }
 
   static Future<String?> enableApps() async {
+    if (!upiAlertsBuild) return 'This install does not include UPI app alerts';
     if (!supported) return 'Reading UPI apps works only on Android';
     final granted = await _notificationAccess();
     if (!granted) {

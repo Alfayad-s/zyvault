@@ -34,11 +34,14 @@ export default function HomePage() {
           zyvault is an Android app for spends, income, plans and goals. Say what you spent, catch UPI payments on the phone, and keep budgets in one calm place.
         </p>
         <div className="actions">
-          <a className="cta" href="/zyvault.apk" download="zyvault.apk">
-            Download APK
+          <a className="cta" href="/zyvault-basic.apk" download="zyvault-basic.apk">
+            Download the basic app
           </a>
-          <a className="cta ghost" href="#how">
-            See how it works
+          <a className="cta ghost" href="/install">
+            App with payment alerts
+          </a>
+          <a className="cta ghost" href="/install">
+            Install steps
           </a>
         </div>
       </section>

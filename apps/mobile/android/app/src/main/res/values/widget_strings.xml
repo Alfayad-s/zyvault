@@ -5,4 +5,6 @@
     <string name="widget_open_app">Open the app once to show your balance</string>
     <string name="widget_speak">Speak</string>
     <string name="widget_type">Type</string>
+    <string name="widget_hide_balance">Hide balance</string>
+    <string name="widget_show_balance">Show balance</string>
 </resources>

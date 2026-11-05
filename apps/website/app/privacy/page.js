@@ -64,7 +64,11 @@ export default function PrivacyPage() {
           <li>The sign-in session.</li>
         </ul>
         <p>
-          Notification access is a phone setting. Android can block it for an app installed outside the Play Store until you allow restricted settings. zyvault uses it only to notice a payment you can then confirm.
+          Notification access is a phone setting. Android can block it for an app installed outside the Play Store until you allow restricted settings. The{' '}
+          <a className="text-link" href="/install">
+            install steps
+          </a>{' '}
+          show how. zyvault uses it only to notice a payment you can then confirm.
         </p>
 
         <h2>Who else handles data</h2>
