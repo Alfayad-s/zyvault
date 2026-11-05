@@ -37,4 +37,20 @@ fi
 cd "$MOBILE_DIR"
 build_one alerts true zyvault.apk
 build_one basic false zyvault-basic.apk
+
+VERSION_LINE="$(grep -E '^version:' "$MOBILE_DIR/pubspec.yaml" | head -1 | awk '{print $2}')"
+VERSION_NAME="${VERSION_LINE%%+*}"
+VERSION_CODE="${VERSION_LINE##*+}"
+python3 - "$SITE_DIR/app-release.json" "$VERSION_CODE" "$VERSION_NAME" <<'PY'
+import json, sys
+path, code, name = sys.argv[1:]
+json.dump({
+    "versionCode": int(code),
+    "versionName": name,
+    "notes": "A new version of zyvault is ready.",
+    "alerts": "https://zyvault.clawdage.com/zyvault.apk",
+    "basic": "https://zyvault.clawdage.com/zyvault-basic.apk",
+}, open(path, "w"), indent=2)
+open(path, "a").write("\n")
+PY
 echo "APKs copied to $SHARE_DIR and $SITE_DIR"

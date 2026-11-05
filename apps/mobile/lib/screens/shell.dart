@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:finance_track/api/finance_api.dart';
+import 'package:finance_track/app_update.dart';
 import 'package:finance_track/build_flags.dart';
 import 'package:finance_track/app_lock.dart';
 import 'package:finance_track/home_screen_widget.dart';
@@ -47,6 +48,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   late final Ledger ledger;
   var _index = 0;
   var _reviewingSms = false;
+  var _updateChecked = false;
   var _foreground = true;
   Timer? _smsPoll;
   StreamSubscription<BankSms>? _upiAlerts;
@@ -65,6 +67,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _widgetClicks = HomeScreenWidget.clicks.listen(_openFromWidget);
     HomeScreenWidget.launchedWith().then(_openFromWidget);
     ProfilePhoto.load();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _offerUpdate());
     ledger.refresh().then((_) async {
       await Push.start(widget.api);
       _syncReminders();
@@ -158,6 +161,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     lock.removeListener(check);
   }
 
+  Future<void> _offerUpdate() async {
+    if (_updateChecked || !mounted) return;
+    await _waitForUnlock();
+    if (!mounted || _updateChecked) return;
+    final done = await offerAppUpdate(context);
+    if (done) _updateChecked = true;
+  }
+
   Future<void> _syncReminders() async {
     try {
       Reminders.sync(await ledger.schedules());
@@ -181,6 +192,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       _foreground = true;
       Notifier.markForeground(true);
+      _offerUpdate();
       ledger.catchUpSchedules();
       if (ledger.summary == null && !ledger.loading) ledger.refresh();
       _watchMoneyAlerts();
@@ -302,7 +314,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   backgroundColor: const Color(0xFFC8F57A),
                   backgroundImage: path == null ? null : FileImage(File(path)),
                   child: path == null
-                      ? const Icon(LucideIcons.user, size: 16, color: Color(0xFF17310C))
+                      ? const Icon(
+                          LucideIcons.user,
+                          size: 16,
+                          color: Color(0xFF17310C),
+                        )
                       : null,
                 ),
               ),

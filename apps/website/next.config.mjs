@@ -7,6 +7,15 @@ const nextConfig = {
   async headers() {
     return [
       {
+        source: '/app-release.json',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-cache',
+          },
+        ],
+      },
+      {
         source: '/:file(zyvault.apk|zyvault-basic.apk)',
         headers: [
           {
