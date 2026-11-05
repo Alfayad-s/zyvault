@@ -1,7 +1,7 @@
 {
-  "versionCode": 3,
-  "versionName": "1.0.2",
-  "notes": "A new version of zyvault is ready.",
+  "versionCode": 4,
+  "versionName": "1.0.3",
+  "notes": "This update connects the app to the live server.",
   "alerts": "https://zyvault.clawdage.com/zyvault.apk",
   "basic": "https://zyvault.clawdage.com/zyvault-basic.apk"
 }
