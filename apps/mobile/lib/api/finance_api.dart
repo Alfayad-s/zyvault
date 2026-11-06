@@ -119,7 +119,11 @@ Object? _tryJson(String body) {
 }
 
 class ServerCheck {
-  const ServerCheck({required this.name, required this.ok, required this.detail});
+  const ServerCheck({
+    required this.name,
+    required this.ok,
+    required this.detail,
+  });
 
   final String name;
   final bool ok;
@@ -180,7 +184,11 @@ class FinanceApi {
   }
 
   Future<ServerReport> serverStatus() async {
-    final body = await _send('GET', '/health/details', timeout: const Duration(seconds: 20));
+    final body = await _send(
+      'GET',
+      '/health/details',
+      timeout: const Duration(seconds: 20),
+    );
     return ServerReport.fromJson(body as Map<String, dynamic>);
   }
 
@@ -288,7 +296,10 @@ class FinanceApi {
     String memory = '',
   }) async {
     final tail = [
-      for (final message in (messages.length > 8 ? messages.sublist(messages.length - 8) : messages))
+      for (final message
+          in (messages.length > 8
+              ? messages.sublist(messages.length - 8)
+              : messages))
         {
           'role': message['role'] ?? 'user',
           'content': (message['content'] ?? '').length > 400
@@ -495,7 +506,8 @@ class FinanceApi {
     required String to,
   }) async {
     final body = await _send('GET', '/summary/period?from=$from&to=$to');
-    final categories = (body as Map<String, dynamic>)['categories'] as List<dynamic>? ?? [];
+    final categories =
+        (body as Map<String, dynamic>)['categories'] as List<dynamic>? ?? [];
     return [
       for (final item in categories)
         CategoryTotal.fromJson(item as Map<String, dynamic>),
@@ -750,8 +762,17 @@ class FinanceApi {
       },
       timeout: const Duration(seconds: 60),
     );
-    if (body is Map<String, dynamic>) return (body['saved'] as num?)?.toInt() ?? rows.length;
+    if (body is Map<String, dynamic>)
+      return (body['saved'] as num?)?.toInt() ?? rows.length;
     return rows.length;
+  }
+
+  Future<Object?> dispatch(
+    String method,
+    String path, [
+    Map<String, dynamic>? body,
+  ]) {
+    return _send(method, path, body: body);
   }
 
   Future<Object?> _send(

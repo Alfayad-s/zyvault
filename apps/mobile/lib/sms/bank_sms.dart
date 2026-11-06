@@ -168,7 +168,7 @@ BankSms? parseUpiNotification({
     if (amount == null) return null;
     final name = person == null ? null : _cleanMerchant(person);
     return BankSms(
-      id: 'APP|$packageName|${date.millisecondsSinceEpoch}|${text.hashCode}',
+      id: 'APP|$packageName|${date.millisecondsSinceEpoch}|${stableTextHash(text)}',
       sender: name == null ? app : '$app $name',
       body: [title, content].where((part) => part.trim().isNotEmpty).join('\n'),
       date: date,
@@ -410,8 +410,18 @@ String senderKey(String sender) {
   return parts.first;
 }
 
+/// FNV-1a over UTF-16 code units. Stable across app launches, unlike [String.hashCode].
+int stableTextHash(String text) {
+  var hash = 0x811C9DC5;
+  for (final unit in text.codeUnits) {
+    hash ^= unit;
+    hash = (hash * 0x01000193) & 0xFFFFFFFF;
+  }
+  return hash;
+}
+
 String smsKey(String sender, String body, DateTime date) {
-  return '${senderKey(sender)}|${date.millisecondsSinceEpoch}|${body.hashCode}';
+  return '${senderKey(sender)}|${date.millisecondsSinceEpoch}|${stableTextHash(body)}';
 }
 
 BankSms? parseBankSms({

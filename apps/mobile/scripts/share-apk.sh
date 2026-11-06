@@ -47,7 +47,7 @@ path, code, name = sys.argv[1:]
 json.dump({
     "versionCode": int(code),
     "versionName": name,
-    "notes": "A new version of zyvault is ready.",
+    "notes": "Chat answers ordinary questions. The home-screen eye hides spending too. Changes made offline stay on the phone and sync later.",
     "alerts": "https://zyvault.clawdage.com/zyvault.apk",
     "basic": "https://zyvault.clawdage.com/zyvault-basic.apk",
 }, open(path, "w"), indent=2)

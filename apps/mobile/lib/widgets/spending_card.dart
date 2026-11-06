@@ -53,12 +53,13 @@ List<SpendingSlice> slicesFromTotals({
   required String kind,
   required List<CategoryTotal> totals,
 }) {
-  final rows = totals.where((item) => item.kind == kind && item.total > 0).toList()
-    ..sort((a, b) {
-      final byAmount = b.total.compareTo(a.total);
-      if (byAmount != 0) return byAmount;
-      return a.name.compareTo(b.name);
-    });
+  final rows =
+      totals.where((item) => item.kind == kind && item.total > 0).toList()
+        ..sort((a, b) {
+          final byAmount = b.total.compareTo(a.total);
+          if (byAmount != 0) return byAmount;
+          return a.name.compareTo(b.name);
+        });
   return [
     for (var index = 0; index < rows.length; index++)
       SpendingSlice(
@@ -443,6 +444,10 @@ class _RingChartState extends State<_RingChart>
   void didUpdateWidget(_RingChart oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_sameSlices(oldWidget.slices, widget.slices)) return;
+    if (!_hasAmount(oldWidget.slices)) {
+      _controller.value = 1;
+      return;
+    }
     if (_hasAmount(widget.slices)) {
       _controller.forward(from: 0);
     } else {

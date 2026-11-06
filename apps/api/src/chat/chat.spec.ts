@@ -74,7 +74,8 @@ describe('buildChatInstruction', () => {
       budgets: ['Food spent ₹4,000 of ₹6,000'],
     });
     expect(instruction).toContain('Read the person\'s latest message');
-    expect(instruction).toContain('Use only the snapshot');
+    expect(instruction).toContain('do not have that figure');
+    expect(instruction).toContain('I can\'t help with that');
     expect(instruction).toContain('12 days left in October');
     expect(instruction).toContain('Food ₹4,000');
     expect(instruction.length).toBeLessThan(4_500);

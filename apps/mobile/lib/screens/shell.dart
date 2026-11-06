@@ -7,6 +7,7 @@ import 'package:finance_track/build_flags.dart';
 import 'package:finance_track/app_lock.dart';
 import 'package:finance_track/home_screen_widget.dart';
 import 'package:finance_track/ledger.dart';
+import 'package:finance_track/money.dart';
 import 'package:finance_track/notifications.dart';
 import 'package:finance_track/push.dart';
 import 'package:finance_track/reminders.dart';
@@ -193,6 +194,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       _foreground = true;
       Notifier.markForeground(true);
       _offerUpdate();
+      ledger.flushPending();
       ledger.catchUpSchedules();
       if (ledger.summary == null && !ledger.loading) ledger.refresh();
       _watchMoneyAlerts();
@@ -205,6 +207,20 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     }
   }
 
+  bool _savedAlready(BankSms sms) {
+    final day = isoDate(sms.date);
+    final merchant = sms.merchant?.trim().toLowerCase();
+    return ledger.transactions.any((item) {
+      if (item.amount != sms.amount ||
+          item.kind != sms.kind ||
+          item.occurredOn != day) {
+        return false;
+      }
+      if (merchant == null || merchant.isEmpty) return true;
+      return (item.note ?? '').toLowerCase().contains(merchant);
+    });
+  }
+
   Future<void> _checkBankSms() async {
     if (_reviewingSms || !mounted || !_foreground || !SmsInbox.supported) {
       return;
@@ -213,10 +229,18 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _reviewingSms = true;
     try {
       final pending = await SmsInbox.pending();
-      if (pending.isEmpty || !mounted) return;
+      final fresh = <BankSms>[];
+      for (final sms in pending) {
+        if (_savedAlready(sms)) {
+          await SmsInbox.markSeen(sms);
+        } else {
+          fresh.add(sms);
+        }
+      }
+      if (fresh.isEmpty || !mounted) return;
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return;
-      await reviewBankSms(context, ledger: ledger, messages: pending);
+      await reviewBankSms(context, ledger: ledger, messages: fresh);
     } catch (error) {
       debugPrint('Could not open a payment: $error');
     } finally {
@@ -326,7 +350,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           ),
         ],
       ),
-      body: pages[_index],
+      body: IndexedStack(index: _index, children: pages),
       bottomNavigationBar: FinanceBottomBar(
         index: _index,
         onChanged: (index) => setState(() => _index = index),

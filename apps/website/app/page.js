@@ -1,7 +1,7 @@
 import { Frame } from '../components/frame';
 import { faqs, features, steps } from '../lib/site';
 
-const marks = ['Cash', 'Every bank', 'UPI', 'Voice', 'Budgets', 'Goals'];
+const marks = ['Cash', 'Every bank', 'UPI', 'Voice', 'Chat', 'Offline'];
 
 function Icon({ name }) {
   const paths = {
@@ -12,6 +12,10 @@ function Icon({ name }) {
     cal: 'M7 2h2v2h6V2h2v2h3v18H4V4h3V2zm11 8H6v10h12V10z',
     chat: 'M4 4h16v12H7l-3 3V4zm3 4v2h10V8H7zm0 4v2h7v-2H7z',
     lock: 'M7 10V7a5 5 0 0 1 10 0v3h1v12H6V10h1zm2 0h6V7a3 3 0 0 0-6 0v3z',
+    spark: 'M12 2l1.6 5.2L19 9l-5.4 1.8L12 16l-1.6-5.2L5 9l5.4-1.8L12 2zm6 12l.8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8L18 14z',
+    widget: 'M4 4h7v7H4V4zm9 0h7v5h-7V4zM4 13h7v7H4v-7zm9 3h7v4h-7v-4z',
+    phone: 'M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm4 16.5a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4z',
+    file: 'M6 2h8l4 4v16H6V2zm8 1.5V7h3.5L14 3.5zM8 11h8v1.5H8V11zm0 3.5h8V16H8v-1.5z',
   };
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -31,7 +35,7 @@ export default function HomePage() {
           money by talking
         </h1>
         <p className="lede">
-          zyvault is an Android app for spends, income, plans and goals. Say what you spent, catch UPI payments on the phone, and keep budgets in one calm place.
+          zyvault is an Android app for spends, income, plans and goals. Say what you spent, ask the chat, catch UPI payments on the phone, and keep the records even when you are offline.
         </p>
         <div className="actions">
           <a className="cta" href="/zyvault-basic.apk" download="zyvault-basic.apk">
@@ -59,7 +63,7 @@ export default function HomePage() {
         <p className="pill">Features</p>
         <h2>A quieter way to track money</h2>
         <p className="sub">
-          Speak a spend, confirm it, and let plans, budgets and questions live next to the balance.
+          Speak a spend, ask the chat, confirm it, and let plans, budgets and the home-screen widget live next to the balance.
         </p>
         <div className="grid">
           {features.map((item) => (

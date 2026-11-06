@@ -75,7 +75,7 @@ export default function PrivacyPage() {
         <ul>
           <li>The database that stores your account and records.</li>
           <li>The email service that delivers the sign-in code.</li>
-          <li>An AI provider, only when you ask zyvault to read a line or a bill.</li>
+          <li>An AI provider, when you ask zyvault to read a line or a bill, or when you send a chat message. The chat sees that message and a short snapshot of your accounts so it can answer. It does not receive your account email.</li>
           <li>Firebase Cloud Messaging, only if a push token is registered, to deliver a reminder.</li>
         </ul>
         <p>Bank logo pictures are ordinary images. They are not your transactions.</p>

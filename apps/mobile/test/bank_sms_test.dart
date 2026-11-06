@@ -193,16 +193,13 @@ void main() {
     final sms = paymentFromNotification(
       packageName: 'com.sbi.lotusintouch',
       title: 'SBI',
-      content:
-          'Dear UPI user A/C X5678 debited by 250.0 on date 18Oct26 trf to zomato@hdfcbank Refno 123456789012. Avl Bal Rs.12,345.67 -SBI',
+      content: 'Dear UPI user A/C X5678 debited by 250.0 on date 18Oct26 trf to zomato@hdfcbank Refno 123456789012. Avl Bal Rs.12,345.67 -SBI',
       date: DateTime(2026, 10, 18, 14),
     )!;
-    expect([sms.amount, sms.kind, sms.bankId, sms.merchant], [
-      25000,
-      'expense',
-      'sbi',
-      'Zomato',
-    ]);
+    expect(
+      [sms.amount, sms.kind, sms.bankId, sms.merchant],
+      [25000, 'expense', 'sbi', 'Zomato'],
+    );
     expect(
       paymentFromNotification(
         packageName: 'com.whatsapp',
@@ -230,6 +227,17 @@ void main() {
     final merged = mergeAlerts([sms], [gpay]);
     expect(merged.single.bankId, 'hdfc');
     expect(merged.single.merchant, 'Ravi');
+  });
+
+  test('keeps the same id for the same message', () {
+    expect(
+      smsKey(
+        'VM-HDFCBK',
+        'Sent Rs.450',
+        DateTime.fromMillisecondsSinceEpoch(1),
+      ),
+      'HDFCBK|1|281681125',
+    );
   });
 
   test('maps sender codes to banks', () {

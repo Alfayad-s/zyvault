@@ -40,7 +40,13 @@ class FinanceWidgetProvider : HomeWidgetProvider() {
             if (balance != null) {
               setTextViewText(R.id.widget_balance, if (hidden) "₹ ••••" else balance)
             }
-            widgetData.getString("widget_spent", null)?.let { setTextViewText(R.id.widget_spent, it) }
+            if (hidden) {
+              setTextViewText(R.id.widget_spent, "Spent •••• this month")
+            } else {
+              widgetData.getString("widget_spent", null)?.let {
+                setTextViewText(R.id.widget_spent, it)
+              }
+            }
             setImageViewResource(
                 R.id.widget_eye,
                 if (hidden) R.drawable.widget_eye_off else R.drawable.widget_eye,
@@ -53,11 +59,12 @@ class FinanceWidgetProvider : HomeWidgetProvider() {
               )
             }
             setOnClickPendingIntent(R.id.widget_eye, toggleIntent(context))
-            setOnClickPendingIntent(
-                R.id.widget_balance_card,
+            val openApp =
                 HomeWidgetLaunchIntent.getActivity(
-                    context, MainActivity::class.java, Uri.parse("financetrack://home")),
-            )
+                    context, MainActivity::class.java, Uri.parse("financetrack://home"))
+            setOnClickPendingIntent(R.id.widget_title, openApp)
+            setOnClickPendingIntent(R.id.widget_balance, openApp)
+            setOnClickPendingIntent(R.id.widget_spent, openApp)
             setOnClickPendingIntent(
                 R.id.widget_speak,
                 HomeWidgetLaunchIntent.getActivity(

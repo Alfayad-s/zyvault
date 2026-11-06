@@ -42,7 +42,7 @@ export default function AboutPage() {
           ))}
         </ul>
         <p>
-          Home shows the balance, spending this month, the next planned payment, goals, budgets and recent operations. Activity charts expenses or income by week, month or quarter. Money holds the accounts. Scheduled holds the plans.
+          Home shows the balance, spending this month, the next planned payment, goals, budgets and recent operations. Activity charts expenses or income by week, month or quarter and keeps that chart when you leave and come back. Money holds the accounts. Scheduled holds the plans. A home-screen widget shows the balance and this month’s spending, and the eye hides both. A change made without internet stays on the phone until it can sync.
         </p>
 
         <h2>What stays on the phone</h2>

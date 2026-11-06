@@ -25,6 +25,15 @@ class Account {
       balance: (json['balance'] as num?)?.toInt(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'type': type,
+    'openingBalance': openingBalance,
+    'bankId': bankId,
+    'balance': balance,
+  };
 }
 
 class Bank {
@@ -84,6 +93,15 @@ class Category {
       custom: json['custom'] as bool? ?? false,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'kind': kind,
+    'icon': icon,
+    'iconUrl': iconUrl,
+    'custom': custom,
+  };
 }
 
 class CategoryIconOption {
@@ -388,6 +406,13 @@ class CategoryTotal {
       total: (json['total'] as num).toInt(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'categoryId': categoryId,
+    'name': name,
+    'kind': kind,
+    'total': total,
+  };
 }
 
 class Budget {
@@ -421,6 +446,15 @@ class Budget {
       spent: (json['spent'] as num?)?.toInt() ?? 0,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'categoryId': categoryId,
+    'categoryName': categoryName,
+    'month': month,
+    'limitAmount': limitAmount,
+    'spent': spent,
+  };
 }
 
 class Schedule {
@@ -464,6 +498,19 @@ class Schedule {
       atTime: json['atTime'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'categoryName': categoryName,
+    'amount': amount,
+    'kind': kind,
+    'note': note,
+    'repeat': repeat,
+    'dayOfMonth': dayOfMonth,
+    'nextOn': nextOn,
+    'accountName': accountName,
+    'atTime': atTime,
+  };
 }
 
 class AgentResult {
@@ -555,6 +602,16 @@ class Goal {
       saved: (json['saved'] as num?)?.toInt() ?? 0,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'icon': icon,
+    'iconUrl': iconUrl,
+    'targetAmount': targetAmount,
+    'targetDate': targetDate,
+    'saved': saved,
+  };
 }
 
 class GoalEntry {
@@ -621,6 +678,17 @@ class DebtEntry {
       note: json['note'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'person': person,
+    'type': type,
+    'amount': amount,
+    'occurredOn': occurredOn,
+    'accountId': accountId,
+    'accountName': accountName,
+    'note': note,
+  };
 }
 
 class Person {
@@ -643,6 +711,12 @@ class Person {
       lastOn: json['lastOn'] as String,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'balance': balance,
+    'lastOn': lastOn,
+  };
 }
 
 class Debts {
@@ -676,6 +750,11 @@ class Debts {
       ],
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'people': people.map((item) => item.toJson()).toList(),
+    'entries': entries.map((item) => item.toJson()).toList(),
+  };
 }
 
 class AccountChange {
@@ -690,6 +769,8 @@ class AccountChange {
       change: (json['change'] as num).toInt(),
     );
   }
+
+  Map<String, dynamic> toJson() => {'accountId': accountId, 'change': change};
 }
 
 class Summary {
@@ -722,6 +803,14 @@ class Summary {
           .toList(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'balance': balance,
+    'monthIncome': monthIncome,
+    'monthExpense': monthExpense,
+    'categories': categories.map((item) => item.toJson()).toList(),
+    'accountChanges': accountChanges.map((item) => item.toJson()).toList(),
+  };
 }
 
 class AskPoint {

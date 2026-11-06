@@ -82,7 +82,7 @@ struct FinanceWidgetView: View {
           .foregroundStyle(ink)
           .lineLimit(1)
           .minimumScaleFactor(0.6)
-        Text(entry.spent)
+        Text(entry.hidden ? "Spent •••• this month" : entry.spent)
           .font(.system(size: 12))
           .foregroundStyle(leaf)
           .lineLimit(1)

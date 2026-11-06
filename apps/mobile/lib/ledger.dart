@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:finance_track/activity_cache.dart';
 import 'package:finance_track/api/finance_api.dart';
 import 'package:finance_track/models.dart';
+import 'package:finance_track/phone_store.dart';
 import 'package:finance_track/money.dart';
 import 'package:finance_track/widgets/category_icon.dart';
 import 'package:flutter/foundation.dart' hide Category, Summary;
@@ -27,23 +29,36 @@ class Ledger extends ChangeNotifier {
   bool loading = false;
   bool loadingMore = false;
   bool transactionsHasMore = false;
+  int dataRevision = 0;
+  bool offline = false;
   int _txGeneration = 0;
   DateTime month = DateTime(DateTime.now().year, DateTime.now().month);
 
   Future<void> clearRecords() async {
     await api.clearRecords();
     await ActivityCache.clear();
+    await PhoneStore.clear();
     month = DateTime(DateTime.now().year, DateTime.now().month);
     await refresh();
   }
 
+  Future<void> flushPending() async {
+    try {
+      if (await _flush()) await refresh();
+    } on AuthExpiredException {
+      await onUnauthorized?.call();
+    } catch (_) {}
+  }
+
   Future<void> refresh() async {
+    if (summary == null) await _restore();
     final generation = ++_txGeneration;
     loading = summary == null;
     loadingMore = false;
     error = null;
     notifyListeners();
     try {
+      await _flush();
       await _runSchedules();
       unawaited(loadBanks());
       unawaited(loadCategoryIcons());
@@ -69,10 +84,21 @@ class Ledger extends ChangeNotifier {
       goals = results[6] as List<Goal>;
       planned = results[7] as List<Schedule>;
       CategoryIcon.remember(categories);
+      offline = false;
+      dataRevision++;
+      await _persist();
     } on AuthExpiredException {
       await onUnauthorized?.call();
     } catch (caught) {
-      if (generation == _txGeneration) error = caught;
+      if (generation == _txGeneration) {
+        error = caught is FinanceException && caught.unavailable
+            ? null
+            : caught;
+        if (caught is FinanceException && caught.unavailable) {
+          offline = true;
+          if (summary == null && await _restore()) dataRevision++;
+        }
+      }
     }
     if (generation != _txGeneration) return;
     loading = false;
@@ -134,19 +160,58 @@ class Ledger extends ChangeNotifier {
     required int targetAmount,
     String? targetDate,
   }) async {
-    await api.saveGoal(
-      id: id,
-      name: name,
-      icon: icon,
-      targetAmount: targetAmount,
-      targetDate: targetDate,
+    final localId = id ?? _localId();
+    await _commit(
+      send: () => api.saveGoal(
+        id: id,
+        name: name,
+        icon: icon,
+        targetAmount: targetAmount,
+        targetDate: targetDate,
+      ),
+      method: id == null ? 'POST' : 'PATCH',
+      path: id == null ? '/goals' : '/goals/$id',
+      body: {
+        'name': name,
+        'icon': icon,
+        'targetAmount': targetAmount,
+        'targetDate': targetDate,
+      },
+      localId: id == null ? localId : null,
+      apply: () {
+        final next = Goal(
+          id: localId,
+          name: name,
+          icon: icon,
+          targetAmount: targetAmount,
+          targetDate: targetDate,
+          saved:
+              goals.where((goal) => goal.id == localId).firstOrNull?.saved ?? 0,
+        );
+        goals = [
+          next,
+          for (final goal in goals)
+            if (goal.id != localId) goal,
+        ];
+      },
     );
-    await refresh();
   }
 
   Future<void> deleteGoal(String id) async {
-    await api.deleteGoal(id);
-    await refresh();
+    await _commit(
+      send: () async {
+        await api.deleteGoal(id);
+        return null;
+      },
+      method: 'DELETE',
+      path: '/goals/$id',
+      apply: () {
+        goals = [
+          for (final goal in goals)
+            if (goal.id != id) goal,
+        ];
+      },
+    );
   }
 
   Future<List<GoalEntry>> goalEntries(String goalId) => api.goalEntries(goalId);
@@ -157,20 +222,61 @@ class Ledger extends ChangeNotifier {
     required int amount,
     String? note,
   }) async {
-    final goal = await api.addGoalEntry(
-      goalId: goalId,
-      type: type,
-      amount: amount,
-      occurredOn: isoDate(DateTime.now()),
-      note: note,
+    final day = isoDate(DateTime.now());
+    Goal? saved;
+    await _commit(
+      send: () async {
+        saved = await api.addGoalEntry(
+          goalId: goalId,
+          type: type,
+          amount: amount,
+          occurredOn: day,
+          note: note,
+        );
+        return saved;
+      },
+      method: 'POST',
+      path: '/goals/$goalId/entries',
+      body: {
+        'type': type,
+        'amount': amount,
+        'occurredOn': day,
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      },
+      apply: () {
+        final sign = type == 'take_out' ? -1 : 1;
+        goals = [
+          for (final goal in goals)
+            if (goal.id == goalId)
+              Goal(
+                id: goal.id,
+                name: goal.name,
+                icon: goal.icon,
+                iconUrl: goal.iconUrl,
+                targetAmount: goal.targetAmount,
+                targetDate: goal.targetDate,
+                saved: goal.saved + sign * amount,
+              )
+            else
+              goal,
+        ];
+      },
     );
-    await refresh();
-    return goal;
+    return saved ??
+        goals.where((goal) => goal.id == goalId).firstOrNull ??
+        Goal(id: goalId, name: '', targetAmount: 0, saved: 0);
   }
 
   Future<void> deleteGoalEntry(String entryId) async {
-    await api.deleteGoalEntry(entryId);
-    await refresh();
+    await _commit(
+      send: () async {
+        await api.deleteGoalEntry(entryId);
+        return null;
+      },
+      method: 'DELETE',
+      path: '/goals/entries/$entryId',
+      apply: () {},
+    );
   }
 
   Future<int> _runSchedules({bool force = false}) async {
@@ -206,18 +312,31 @@ class Ledger extends ChangeNotifier {
   Future<List<Schedule>> schedules() => api.schedules();
 
   Future<void> deleteSchedule(String id) async {
-    await api.deleteSchedule(id);
-    planned = [
-      for (final schedule in planned)
-        if (schedule.id != id) schedule,
-    ];
-    notifyListeners();
+    await _commit(
+      send: () async {
+        await api.deleteSchedule(id);
+        return null;
+      },
+      method: 'DELETE',
+      path: '/schedules/$id',
+      apply: () {
+        planned = [
+          for (final schedule in planned)
+            if (schedule.id != id) schedule,
+        ];
+      },
+    );
   }
 
   void changeMonth(int delta) {
     final today = DateTime.now();
     final next = DateTime(month.year, month.month + delta);
-    if (DateTime(next.year, next.month).isAfter(DateTime(today.year, today.month))) return;
+    if (DateTime(
+      next.year,
+      next.month,
+    ).isAfter(DateTime(today.year, today.month))) {
+      return;
+    }
     month = DateTime(next.year, next.month);
     refresh();
   }
@@ -228,13 +347,44 @@ class Ledger extends ChangeNotifier {
     required int openingBalance,
     String? bankId,
   }) async {
-    await api.createAccount(
-      name: name,
-      type: type,
-      openingBalance: openingBalance,
-      bankId: bankId,
+    final localId = _localId();
+    await _commit(
+      send: () => api.createAccount(
+        name: name,
+        type: type,
+        openingBalance: openingBalance,
+        bankId: bankId,
+      ),
+      method: 'POST',
+      path: '/accounts',
+      localId: localId,
+      body: {
+        'name': name,
+        'type': type,
+        'openingBalance': openingBalance,
+        'bankId': bankId,
+      },
+      apply: () {
+        accounts = [
+          ...accounts,
+          Account(
+            id: localId,
+            name: name,
+            type: type,
+            openingBalance: openingBalance,
+            bankId: bankId,
+            balance: openingBalance,
+          ),
+        ];
+        summary = Summary(
+          balance: (summary?.balance ?? 0) + openingBalance,
+          monthIncome: summary?.monthIncome ?? 0,
+          monthExpense: summary?.monthExpense ?? 0,
+          categories: summary?.categories ?? const [],
+          accountChanges: summary?.accountChanges ?? const [],
+        );
+      },
     );
-    await refresh();
   }
 
   Future<void> updateAccount({
@@ -244,19 +394,57 @@ class Ledger extends ChangeNotifier {
     required int openingBalance,
     String? bankId,
   }) async {
-    await api.updateAccount(
-      id: id,
-      name: name,
-      type: type,
-      openingBalance: openingBalance,
-      bankId: bankId,
+    await _commit(
+      send: () => api.updateAccount(
+        id: id,
+        name: name,
+        type: type,
+        openingBalance: openingBalance,
+        bankId: bankId,
+      ),
+      method: 'PATCH',
+      path: '/accounts/$id',
+      body: {
+        'name': name,
+        'type': type,
+        'openingBalance': openingBalance,
+        'bankId': bankId,
+      },
+      apply: () {
+        accounts = [
+          for (final account in accounts)
+            if (account.id == id)
+              Account(
+                id: id,
+                name: name,
+                type: type,
+                openingBalance: openingBalance,
+                bankId: bankId,
+                balance:
+                    account.balance - account.openingBalance + openingBalance,
+              )
+            else
+              account,
+        ];
+      },
     );
-    await refresh();
   }
 
   Future<void> deleteAccount(String id) async {
-    await api.deleteAccount(id);
-    await refresh();
+    await _commit(
+      send: () async {
+        await api.deleteAccount(id);
+        return null;
+      },
+      method: 'DELETE',
+      path: '/accounts/$id',
+      apply: () {
+        accounts = [
+          for (final account in accounts)
+            if (account.id != id) account,
+        ];
+      },
+    );
   }
 
   List<CategoryIconOption> categoryIcons = [];
@@ -276,8 +464,26 @@ class Ledger extends ChangeNotifier {
     required String kind,
     required String icon,
   }) async {
-    await api.createCategory(name: name, kind: kind, icon: icon);
-    await refresh();
+    final localId = _localId();
+    await _commit(
+      send: () => api.createCategory(name: name, kind: kind, icon: icon),
+      method: 'POST',
+      path: '/categories',
+      localId: localId,
+      body: {'name': name, 'kind': kind, 'icon': icon},
+      apply: () {
+        categories = [
+          ...categories,
+          Category(
+            id: localId,
+            name: name,
+            kind: kind,
+            icon: icon,
+            custom: true,
+          ),
+        ];
+      },
+    );
   }
 
   Future<void> updateCategory({
@@ -285,13 +491,45 @@ class Ledger extends ChangeNotifier {
     String? name,
     String? icon,
   }) async {
-    await api.updateCategory(id: id, name: name, icon: icon);
-    await refresh();
+    await _commit(
+      send: () => api.updateCategory(id: id, name: name, icon: icon),
+      method: 'PATCH',
+      path: '/categories/$id',
+      body: {'name': name, 'icon': icon},
+      apply: () {
+        categories = [
+          for (final category in categories)
+            if (category.id == id)
+              Category(
+                id: category.id,
+                name: name ?? category.name,
+                kind: category.kind,
+                icon: icon ?? category.icon,
+                iconUrl: category.iconUrl,
+                custom: category.custom,
+              )
+            else
+              category,
+        ];
+      },
+    );
   }
 
   Future<void> deleteCategory(String id) async {
-    await api.deleteCategory(id);
-    await refresh();
+    await _commit(
+      send: () async {
+        await api.deleteCategory(id);
+        return null;
+      },
+      method: 'DELETE',
+      path: '/categories/$id',
+      apply: () {
+        categories = [
+          for (final category in categories)
+            if (category.id != id) category,
+        ];
+      },
+    );
   }
 
   Future<void> saveDebt({
@@ -302,20 +540,83 @@ class Ledger extends ChangeNotifier {
     String? accountId,
     String? note,
   }) async {
-    await api.createDebt(
-      person: person,
-      type: type,
-      amount: amount,
-      occurredOn: occurredOn,
-      accountId: accountId,
-      note: note,
+    final localId = _localId();
+    await _commit(
+      send: () => api.createDebt(
+        person: person,
+        type: type,
+        amount: amount,
+        occurredOn: occurredOn,
+        accountId: accountId,
+        note: note,
+      ),
+      method: 'POST',
+      path: '/debts',
+      localId: localId,
+      body: {
+        'person': person,
+        'type': type,
+        'amount': amount,
+        'occurredOn': occurredOn,
+        'accountId': accountId,
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      },
+      apply: () {
+        final account = accounts
+            .where((item) => item.id == accountId)
+            .firstOrNull;
+        final entry = DebtEntry(
+          id: localId,
+          person: person,
+          type: type,
+          amount: amount,
+          occurredOn: occurredOn,
+          accountId: accountId,
+          accountName: account?.name,
+          note: note,
+        );
+        final delta = entry.moneyIn ? -amount : amount;
+        final people = [
+          for (final item in debts.people)
+            if (item.name.toLowerCase() != person.toLowerCase()) item,
+          Person(
+            name: person,
+            balance:
+                (debts.people
+                        .where(
+                          (item) =>
+                              item.name.toLowerCase() == person.toLowerCase(),
+                        )
+                        .firstOrNull
+                        ?.balance ??
+                    0) +
+                delta,
+            lastOn: occurredOn,
+          ),
+        ];
+        debts = Debts(people: people, entries: [entry, ...debts.entries]);
+      },
     );
-    await refresh();
   }
 
   Future<void> deleteDebt(String id) async {
-    await api.deleteDebt(id);
-    await refresh();
+    await _commit(
+      send: () async {
+        await api.deleteDebt(id);
+        return null;
+      },
+      method: 'DELETE',
+      path: '/debts/$id',
+      apply: () {
+        debts = Debts(
+          people: debts.people,
+          entries: [
+            for (final entry in debts.entries)
+              if (entry.id != id) entry,
+          ],
+        );
+      },
+    );
   }
 
   List<Bank> banks = [];
@@ -358,16 +659,43 @@ class Ledger extends ChangeNotifier {
     required String occurredOn,
     String? note,
   }) async {
-    await api.saveTransaction(
-      id: id,
-      accountId: accountId,
-      categoryId: categoryId,
-      amount: amount,
-      kind: kind,
-      occurredOn: occurredOn,
-      note: note,
+    final localId = id ?? _localId();
+    await _commit(
+      send: () => api.saveTransaction(
+        id: id,
+        accountId: accountId,
+        categoryId: categoryId,
+        amount: amount,
+        kind: kind,
+        occurredOn: occurredOn,
+        note: note,
+      ),
+      method: id == null ? 'POST' : 'PATCH',
+      path: id == null ? '/transactions' : '/transactions/$id',
+      localId: id == null ? localId : null,
+      body: {
+        'accountId': accountId,
+        'categoryId': categoryId,
+        'amount': amount,
+        'kind': kind,
+        'occurredOn': occurredOn,
+        'note': note,
+      },
+      apply: () {
+        _putTransaction(
+          _localTransaction(
+            id: localId,
+            accountId: accountId,
+            categoryId: categoryId,
+            amount: amount,
+            kind: kind,
+            occurredOn: occurredOn,
+            note: note,
+          ),
+          replaceId: id ?? localId,
+        );
+      },
     );
-    await refresh();
   }
 
   Future<List<StatementLine>> previewStatement({
@@ -388,18 +716,61 @@ class Ledger extends ChangeNotifier {
     required String accountId,
     required List<StatementLine> rows,
   }) async {
-    final saved = await api.commitStatement(accountId: accountId, rows: rows);
+    var saved = rows.length;
     if (rows.isNotEmpty) {
       final today = DateTime.now();
-      final current = '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}';
-      final latest = rows.map((row) => row.occurredOn).reduce((a, b) => a.compareTo(b) > 0 ? a : b);
-      final chosen = rows.any((row) => row.occurredOn.startsWith(current)) ? current : latest;
+      final current =
+          '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}';
+      final latest = rows
+          .map((row) => row.occurredOn)
+          .reduce((a, b) => a.compareTo(b) > 0 ? a : b);
+      final chosen = rows.any((row) => row.occurredOn.startsWith(current))
+          ? current
+          : latest;
       final parts = chosen.split('-');
       final year = int.tryParse(parts[0]);
       final monthNumber = int.tryParse(parts[1]);
-      if (year != null && monthNumber != null) month = DateTime(year, monthNumber);
+      if (year != null && monthNumber != null) {
+        month = DateTime(year, monthNumber);
+      }
     }
-    await refresh();
+    await _commit(
+      send: () async {
+        saved = await api.commitStatement(accountId: accountId, rows: rows);
+        return saved;
+      },
+      method: 'POST',
+      path: '/transactions/import/commit',
+      body: {
+        'accountId': accountId,
+        'items': [
+          for (final row in rows)
+            {
+              'accountId': accountId,
+              'categoryId': row.categoryId,
+              'amount': row.amount,
+              'kind': row.kind,
+              'occurredOn': row.occurredOn,
+              'note': row.note,
+            },
+        ],
+      },
+      apply: () {
+        for (final row in rows) {
+          _putTransaction(
+            _localTransaction(
+              id: _localId(),
+              accountId: accountId,
+              categoryId: row.categoryId,
+              amount: row.amount,
+              kind: row.kind,
+              occurredOn: row.occurredOn,
+              note: row.note,
+            ),
+          );
+        }
+      },
+    );
     return saved;
   }
 
@@ -422,10 +793,11 @@ class Ledger extends ChangeNotifier {
     required String text,
     required String accountId,
   }) async {
+    final today = isoDate(DateTime.now());
     final saved = await api.parseTransactions(
       text: text,
       accountId: accountId,
-      today: isoDate(DateTime.now()),
+      today: today,
     );
     await refresh();
     return saved;
@@ -446,23 +818,75 @@ class Ledger extends ChangeNotifier {
     required List<ParsedSpend> items,
     required String accountId,
   }) async {
-    final saved = await api.commitTransactions(
-      items: items,
-      accountId: accountId,
-      today: isoDate(DateTime.now()),
+    final today = isoDate(DateTime.now());
+    final time = clockTime(DateTime.now());
+    List<AgentResult> saved = const [];
+    await _commit(
+      send: () async {
+        saved = await api.commitTransactions(
+          items: items,
+          accountId: accountId,
+          today: today,
+        );
+        return saved;
+      },
+      method: 'POST',
+      path: '/transactions/commit',
+      body: {
+        'items': [for (final item in items) item.toCommitJson()],
+        'accountId': accountId,
+        'today': today,
+        'time': time,
+      },
+      apply: () {
+        for (final item in items) {
+          if (item.schedule != null || item.debt != null || item.goal != null) {
+            continue;
+          }
+          _putTransaction(
+            _localTransaction(
+              id: _localId(),
+              accountId: item.accountId ?? accountId,
+              categoryId: item.categoryId,
+              amount: item.amount,
+              kind: item.kind,
+              occurredOn: item.occurredOn,
+              note: item.note,
+            ),
+          );
+        }
+      },
     );
-    await refresh();
     return saved;
   }
 
   Future<void> deleteTransaction(String id) async {
-    await api.deleteTransaction(id);
-    await refresh();
+    await _commit(
+      send: () async {
+        await api.deleteTransaction(id);
+        return null;
+      },
+      method: 'DELETE',
+      path: '/transactions/$id',
+      apply: () => _dropTransaction(id),
+    );
   }
 
   Future<void> deleteBudget(String id) async {
-    await api.deleteBudget(id);
-    await refresh();
+    await _commit(
+      send: () async {
+        await api.deleteBudget(id);
+        return null;
+      },
+      method: 'DELETE',
+      path: '/budgets/$id',
+      apply: () {
+        budgets = [
+          for (final budget in budgets)
+            if (budget.id != id) budget,
+        ];
+      },
+    );
   }
 
   Budget? budgetFor(String categoryName) {
@@ -476,11 +900,226 @@ class Ledger extends ChangeNotifier {
     required String categoryId,
     required int limitAmount,
   }) async {
-    await api.saveBudget(
-      categoryId: categoryId,
-      month: monthKey(month),
-      limitAmount: limitAmount,
+    final monthName = monthKey(month);
+    final category = categories
+        .where((item) => item.id == categoryId)
+        .firstOrNull;
+    await _commit(
+      send: () => api.saveBudget(
+        categoryId: categoryId,
+        month: monthName,
+        limitAmount: limitAmount,
+      ),
+      method: 'PUT',
+      path: '/budgets',
+      body: {
+        'categoryId': categoryId,
+        'month': monthName,
+        'limitAmount': limitAmount,
+      },
+      apply: () {
+        final localId = _localId();
+        budgets = [
+          for (final budget in budgets)
+            if (budget.categoryId != categoryId || budget.month != monthName)
+              budget,
+          Budget(
+            id: localId,
+            categoryId: categoryId,
+            categoryName: category?.name ?? '',
+            month: monthName,
+            limitAmount: limitAmount,
+          ),
+        ];
+      },
     );
-    await refresh();
+  }
+
+  Future<bool> _flush() async {
+    final pending = await PhoneStore.readOutbox();
+    if (pending.isEmpty) return false;
+    final ids = <String, String>{};
+    for (var index = 0; index < pending.length; index++) {
+      final item = pending[index];
+      try {
+        final result = await api.dispatch(
+          item['method'] as String,
+          _swap(item['path'] as String, ids),
+          _swapBody(item['body'], ids),
+        );
+        final localId = item['localId'] as String?;
+        if (localId != null && result is Map && result['id'] is String) {
+          ids[localId] = result['id'] as String;
+        }
+      } catch (error) {
+        await PhoneStore.writeOutbox(pending.sublist(index));
+        rethrow;
+      }
+    }
+    await PhoneStore.writeOutbox(const []);
+    return true;
+  }
+
+  Future<void> _persist() async {
+    await PhoneStore.saveLedger(
+      month: monthKey(month),
+      summary: summary,
+      transactions: transactions,
+      accounts: accounts,
+      categories: categories,
+      budgets: budgets,
+      debts: debts,
+      goals: goals,
+      planned: planned,
+    );
+  }
+
+  Future<bool> _restore() async {
+    final saved = await PhoneStore.readLedger();
+    if (saved == null || saved.summary == null) return false;
+    summary = saved.summary;
+    transactions = saved.transactions;
+    transactionsHasMore = transactions.length == transactionPageSize;
+    recent = transactions.take(5).toList();
+    accounts = saved.accounts;
+    categories = saved.categories;
+    budgets = saved.budgets;
+    debts = saved.debts;
+    goals = saved.goals;
+    planned = saved.planned;
+    CategoryIcon.remember(categories);
+    return true;
+  }
+
+  Future<void> _commit({
+    required Future<Object?> Function() send,
+    required void Function() apply,
+    required String method,
+    required String path,
+    Map<String, dynamic>? body,
+    String? localId,
+  }) async {
+    try {
+      await send();
+      await refresh();
+    } on AuthExpiredException {
+      await onUnauthorized?.call();
+    } catch (error) {
+      if (error is! FinanceException || !error.unavailable) rethrow;
+      apply();
+      await PhoneStore.enqueue(
+        method: method,
+        path: path,
+        body: body,
+        localId: localId,
+      );
+      await _persist();
+      offline = true;
+      dataRevision++;
+      notifyListeners();
+    }
+  }
+
+  String _localId() => 'local-${DateTime.now().microsecondsSinceEpoch}';
+
+  void _putTransaction(TransactionItem item, {String? replaceId}) {
+    final id = replaceId ?? item.id;
+    final previous = transactions.where((row) => row.id == id).firstOrNull;
+    if (previous != null) _moveMoney(previous, remove: true);
+    transactions = [
+      item,
+      for (final row in transactions)
+        if (row.id != id) row,
+    ];
+    recent = transactions.take(5).toList();
+    _moveMoney(item, remove: false);
+  }
+
+  void _dropTransaction(String id) {
+    final previous = transactions.where((row) => row.id == id).firstOrNull;
+    if (previous != null) _moveMoney(previous, remove: true);
+    transactions = [
+      for (final row in transactions)
+        if (row.id != id) row,
+    ];
+    recent = transactions.take(5).toList();
+  }
+
+  void _moveMoney(TransactionItem item, {required bool remove}) {
+    final sign = item.kind == 'income' ? 1 : -1;
+    final delta = remove ? -sign * item.amount : sign * item.amount;
+    final current = summary;
+    final monthName = monthKey(month);
+    final inMonth = item.occurredOn.startsWith(monthName);
+    summary = Summary(
+      balance: (current?.balance ?? 0) + delta,
+      monthIncome:
+          (current?.monthIncome ?? 0) +
+          (inMonth && item.kind == 'income'
+              ? (remove ? -item.amount : item.amount)
+              : 0),
+      monthExpense:
+          (current?.monthExpense ?? 0) +
+          (inMonth && item.kind == 'expense'
+              ? (remove ? -item.amount : item.amount)
+              : 0),
+      categories: current?.categories ?? const [],
+      accountChanges: current?.accountChanges ?? const [],
+    );
+    accounts = [
+      for (final account in accounts)
+        if (account.id == item.accountId)
+          Account(
+            id: account.id,
+            name: account.name,
+            type: account.type,
+            openingBalance: account.openingBalance,
+            bankId: account.bankId,
+            balance: account.balance + delta,
+          )
+        else
+          account,
+    ];
+  }
+
+  TransactionItem _localTransaction({
+    required String id,
+    required String accountId,
+    required String categoryId,
+    required int amount,
+    required String kind,
+    required String occurredOn,
+    String? note,
+  }) {
+    final account = accounts.where((item) => item.id == accountId).firstOrNull;
+    final category = categories
+        .where((item) => item.id == categoryId)
+        .firstOrNull;
+    return TransactionItem(
+      id: id,
+      accountId: accountId,
+      accountName: account?.name ?? '',
+      categoryId: categoryId,
+      categoryName: category?.name ?? '',
+      amount: amount,
+      kind: kind,
+      occurredOn: occurredOn,
+      note: note,
+    );
+  }
+
+  String _swap(String value, Map<String, String> ids) {
+    var out = value;
+    for (final entry in ids.entries) {
+      out = out.replaceAll(entry.key, entry.value);
+    }
+    return out;
+  }
+
+  Map<String, dynamic>? _swapBody(Object? body, Map<String, String> ids) {
+    if (body is! Map) return null;
+    final encoded = _swap(jsonEncode(body), ids);
+    final decoded = jsonDecode(encoded);
+    return decoded is Map<String, dynamic> ? decoded : null;
   }
 }

@@ -12,7 +12,7 @@ export const site = {
   name: 'zyvault',
   title: 'zyvault — an Android money tracker you talk to',
   description:
-    'zyvault is an Android app for rupees. Say a spend in English, Malayalam or Hinglish, catch bank SMS and UPI alerts on the phone, and keep budgets, goals and who owes whom.',
+    'zyvault is an Android app for rupees. Say a spend, ask the chat to explain or record it, catch bank SMS and UPI alerts on the phone, and keep budgets, goals and who owes whom, including when you are offline.',
   contactEmail: 'hello@clawdage.com',
 };
 
@@ -41,6 +41,26 @@ export const features = [
     title: 'Ask your money',
     body: 'Ask “How much on food this month?” or “Who owes me?” The answer comes back with a chart, from the accounts and categories you already keep.',
     icon: 'chat',
+  },
+  {
+    title: 'Chat that answers',
+    body: 'The assistant answers how the app works, what a budget means, and questions about your month. You can also tell it to log a spend, set a budget, add to a goal or note money lent. It shows the line first. A question that does not save anything still gets an answer.',
+    icon: 'spark',
+  },
+  {
+    title: 'Home screen widget',
+    body: 'A widget on the phone shows the balance and what you spent this month. The eye hides both lines. Tap the balance to open zyvault.',
+    icon: 'widget',
+  },
+  {
+    title: 'Works offline',
+    body: 'Add or change an account, category, spend, budget, goal, debt or plan without a connection. It stays on the phone and is sent to your account when the internet is back.',
+    icon: 'phone',
+  },
+  {
+    title: 'Bank statements',
+    body: 'Open a bank statement PDF and check the lines before they are saved. A photo of a bill works the same way: you see the amount and merchant, then confirm.',
+    icon: 'file',
   },
   {
     title: 'Private on the phone',
@@ -94,6 +114,16 @@ export const faqs = [
     question: 'How do budgets and goals work?',
     answer:
       'A budget is a monthly limit on a category. zyvault warns you when that category reaches 80% and when it goes over. A goal is an amount you are saving toward. You can add to it by saying so, for example “add 500 to Goa trip”.',
+  },
+  {
+    question: 'What can I ask the chat?',
+    answer:
+      'Ask how to record a spend, what you spent, or how a budget, goal or plan works. You can also tell it to prepare a line, a budget, a goal or money lent to someone. It answers the question. It does not save until you confirm.',
+  },
+  {
+    question: 'Does zyvault work without internet?',
+    answer:
+      'Yes for the records you keep. A change made offline stays on the phone and is sent when the connection returns. Reading a bill, a statement or a chat reply needs the server.',
   },
   {
     question: 'Is zyvault on the Play Store?',

@@ -29,6 +29,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   var _hasMore = false;
   var _loadingMore = false;
   var _request = 0;
+  String? _fetchedKey;
+  var _fetchedRevision = -1;
   final _cache = ActivityCache();
 
   Ledger get ledger => widget.ledger;
@@ -52,8 +54,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         _anchor = DateTime(month.year, month.month);
       }
     }
-    _cache.forget();
-    _load(preferCache: false);
+    _load();
   }
 
   @override
@@ -62,53 +63,60 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     super.dispose();
   }
 
-  Future<void> _load({bool preferCache = true}) async {
-    final request = ++_request;
+  Future<void> _load({bool force = false}) async {
     final period = historyPeriod(_span, _anchor);
     final from = periodQueryStart(period);
     final to = periodQueryEnd(period);
-    if (preferCache) {
-      final remembered = _page(_cache.memory(from, to, kind: _kind));
-      if (!mounted) return;
-      if (remembered != null) {
-        setState(() {
-          _items = remembered;
-          _hasMore = remembered.length == transactionPageSize;
-          _ready = true;
-          _error = null;
-        });
-      } else {
-        final stored = _page(await _cache.read(from, to, kind: _kind));
-        if (!mounted || request != _request) return;
-        if (stored != null) {
-          setState(() {
-            _items = stored;
-            _hasMore = stored.length == transactionPageSize;
-            _ready = true;
-            _error = null;
-          });
-        }
-      }
+    final key = '$from:$to:$_kind';
+    if (!force &&
+        _ready &&
+        _fetchedKey == key &&
+        _fetchedRevision == ledger.dataRevision) {
+      return;
+    }
+    final request = ++_request;
+    final remembered = _page(_cache.memory(from, to, kind: _kind));
+    if (remembered != null) {
+      _show(remembered);
+    } else {
+      final stored = _page(await _cache.read(from, to, kind: _kind));
+      if (!mounted || request != _request) return;
+      if (stored != null) _show(stored);
+    }
+    if (!force &&
+        _ready &&
+        _fetchedKey == key &&
+        _fetchedRevision == ledger.dataRevision) {
+      return;
     }
     try {
       final loaded = await Future.wait([
-        ledger.api.transactions(from: from, to: to, limit: transactionPageSize, kind: _kind),
+        ledger.api.transactions(
+          from: from,
+          to: to,
+          limit: transactionPageSize,
+          kind: _kind,
+        ),
         ledger.api.periodCategories(from: from, to: to),
       ]);
       if (!mounted || request != _request) return;
       final items = loaded[0] as List<TransactionItem>;
+      final totals = loaded[1] as List<CategoryTotal>;
       setState(() {
         _items = items;
-        _totals = loaded[1] as List<CategoryTotal>;
+        _totals = totals;
         _hasMore = items.length == transactionPageSize;
         _ready = true;
         _error = null;
+        _fetchedKey = key;
+        _fetchedRevision = ledger.dataRevision;
       });
-      await _cache.write(from, to, items, kind: _kind);
+      await _cache.write(from, to, items, totals, kind: _kind);
     } on AuthExpiredException {
       await ledger.onUnauthorized?.call();
     } catch (caught) {
       if (!mounted || request != _request) return;
+      _keepLocal(from, to);
       setState(() {
         _ready = true;
         if (_items.isEmpty) _error = caught;
@@ -116,9 +124,44 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     }
   }
 
-  List<TransactionItem>? _page(List<TransactionItem>? items) {
-    if (items == null || items.length > transactionPageSize) return null;
-    return items;
+  void _show(ActivityPage page) {
+    setState(() {
+      _items = page.items;
+      if (page.totals.isNotEmpty) _totals = page.totals;
+      _hasMore = page.items.length == transactionPageSize;
+      _ready = true;
+      _error = null;
+    });
+  }
+
+  void _keepLocal(String from, String to) {
+    final local = [
+      for (final item in ledger.transactions)
+        if (item.id.startsWith('local-') &&
+            item.kind == _kind &&
+            item.occurredOn.compareTo(from) >= 0 &&
+            item.occurredOn.compareTo(to) <= 0)
+          item,
+    ];
+    if (local.isEmpty) return;
+    final seen = _items.map((item) => item.id).toSet();
+    _items = [...local.where((item) => !seen.contains(item.id)), ..._items];
+    final totals = <String, CategoryTotal>{};
+    for (final item in _items.where((item) => item.kind == _kind)) {
+      final current = totals[item.categoryId];
+      totals[item.categoryId] = CategoryTotal(
+        categoryId: item.categoryId,
+        name: item.categoryName,
+        kind: item.kind,
+        total: (current?.total ?? 0) + item.amount,
+      );
+    }
+    _totals = totals.values.toList();
+  }
+
+  ActivityPage? _page(ActivityPage? page) {
+    if (page == null || page.items.length > transactionPageSize) return null;
+    return page;
   }
 
   Future<void> _loadMore() async {
@@ -149,15 +192,20 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   }
 
   Future<void> _refresh() async {
-    _cache.forget();
-    await Future.wait([ledger.refresh(), _load(preferCache: false)]);
+    await ledger.refresh();
+    await _load(force: true);
   }
 
   void _shift(int delta) {
     final next = shiftAnchor(_span, _anchor, delta);
     if (_span == 'month') {
       final today = DateTime.now();
-      if (DateTime(next.year, next.month).isAfter(DateTime(today.year, today.month))) return;
+      if (DateTime(
+        next.year,
+        next.month,
+      ).isAfter(DateTime(today.year, today.month))) {
+        return;
+      }
       ledger.month = DateTime(next.year, next.month);
       ledger.refresh();
       return;
@@ -177,68 +225,71 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         return false;
       },
       child: PullRefresh(
-      onRefresh: _refresh,
-      child: ListView(
-      physics: pullPhysics,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
-      children: [
-        SpendingCard(
-          kind: _kind,
-          span: _span,
-          previousLabel: period.previousLabel,
-          currentLabel: period.label,
-          nextLabel: period.nextLabel,
-          slices: slices,
-          onKind: (kind) {
-            if (kind == _kind) return;
-            setState(() => _kind = kind);
-            _load(preferCache: false);
-          },
-          onSpan: (span) {
-            setState(() => _span = span);
-            _load();
-          },
-          onPrevious: () => _shift(-1),
-          onNext: () => _shift(1),
-        ),
-        const SizedBox(height: 16),
-        if (_error != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              '$_error',
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFFFFB4AB)),
+        onRefresh: _refresh,
+        child: ListView(
+          physics: pullPhysics,
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+          children: [
+            SpendingCard(
+              kind: _kind,
+              span: _span,
+              previousLabel: period.previousLabel,
+              currentLabel: period.label,
+              nextLabel: period.nextLabel,
+              slices: slices,
+              onKind: (kind) {
+                if (kind == _kind) return;
+                setState(() => _kind = kind);
+                _load(force: true);
+              },
+              onSpan: (span) {
+                setState(() => _span = span);
+                _load();
+              },
+              onPrevious: () => _shift(-1),
+              onNext: () => _shift(1),
             ),
-          ),
-        if (_ready || shown.isNotEmpty)
-          OperationsCard(
-            transactions: shown,
-            now: DateTime.now(),
-            onOpenTransaction: (transaction) {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (context) => TransactionFormScreen(
-                    ledger: ledger,
-                    existing: transaction,
+            const SizedBox(height: 16),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  '$_error',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Color(0xFFFFB4AB)),
+                ),
+              ),
+            if (_ready || shown.isNotEmpty)
+              OperationsCard(
+                transactions: shown,
+                now: DateTime.now(),
+                onOpenTransaction: (transaction) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (context) => TransactionFormScreen(
+                        ledger: ledger,
+                        existing: transaction,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            if (_loadingMore)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFFC8F57A),
+                    ),
                   ),
                 ),
-              );
-            },
-          ),
-        if (_loadingMore)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Center(
-              child: SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFC8F57A)),
               ),
-            ),
-          ),
-      ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -246,6 +297,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
 bool _nearEnd(ScrollNotification notice) {
   if (notice.metrics.axis != Axis.vertical) return false;
-  if (notice is! ScrollUpdateNotification && notice is! ScrollEndNotification) return false;
+  if (notice is! ScrollUpdateNotification && notice is! ScrollEndNotification) {
+    return false;
+  }
   return notice.metrics.maxScrollExtent > 0 && notice.metrics.extentAfter < 480;
 }
