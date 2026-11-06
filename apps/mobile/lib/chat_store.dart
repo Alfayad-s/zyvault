@@ -10,6 +10,7 @@ class StoredTurn {
     this.review = 'open',
     this.voice = false,
     this.seconds = 0,
+    this.language = 'en',
   });
 
   final String role;
@@ -18,6 +19,7 @@ class StoredTurn {
   final String review;
   final bool voice;
   final int seconds;
+  final String language;
 }
 
 /// The chat thread lives on the phone. Older turns are packed into a short
@@ -42,6 +44,7 @@ class ChatStore {
               review: item['review'] is String ? item['review'] as String : 'open',
               voice: item['voice'] == true,
               seconds: item['seconds'] is num ? (item['seconds'] as num).toInt() : 0,
+              language: item['language'] == 'ml' ? 'ml' : 'en',
             ),
       ];
     } catch (_) {
@@ -63,6 +66,7 @@ class ChatStore {
               'review': turn.review,
               'voice': turn.voice,
               'seconds': turn.seconds,
+              'language': turn.language,
             },
         ]),
       );

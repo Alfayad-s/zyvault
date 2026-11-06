@@ -41,7 +41,11 @@ class ReplyVoice {
     _ready = true;
   }
 
-  static Future<String?> speak(String text, {required VoidCallback onDone}) async {
+  static Future<String?> speak(
+    String text, {
+    String? language,
+    required VoidCallback onDone,
+  }) async {
     final spoken = text.trim();
     if (spoken.isEmpty) return null;
     try {
@@ -50,7 +54,8 @@ class ReplyVoice {
         await _tts.stop();
         _playing = false;
       }
-      final malayalam = RegExp(r'[\u0D00-\u0D7F]').hasMatch(spoken);
+      final malayalam = language == 'ml' ||
+          (language != 'en' && RegExp(r'[\u0D00-\u0D7F]').hasMatch(spoken));
       final languages = malayalam
           ? const ['ml-IN', 'ml_IN', 'en-IN', 'en-US']
           : const ['en-IN', 'en_IN', 'en-US', 'en_US'];

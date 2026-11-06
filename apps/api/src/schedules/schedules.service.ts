@@ -172,6 +172,40 @@ export class SchedulesService {
     return toSchedule(data as unknown as ScheduleRow);
   }
 
+  async update(userId: string, id: string, input: NewSchedule): Promise<Schedule> {
+    await this.assertRefs(userId, input);
+    const values = {
+      account_id: input.accountId,
+      category_id: input.categoryId,
+      amount: input.amount,
+      kind: input.kind,
+      note: input.note?.trim() || null,
+      repeat: input.repeat,
+      day_of_month: input.dayOfMonth,
+      next_on: input.nextOn,
+    };
+    const patch = (row: Record<string, unknown>, select: string) =>
+      this.supabase
+        .from('scheduled_transactions')
+        .update(row)
+        .eq('id', id)
+        .eq('user_id', userId)
+        .select(select)
+        .maybeSingle();
+    let { data, error } = await patch({ ...values, at_time: input.atTime ?? null }, scheduleSelect);
+    if (missingTimeColumn(error)) {
+      if (input.atTime) {
+        throw new BadRequestException(
+          'Plans with a time need the latest supabase/schema.sql. Run it in Supabase, then try again',
+        );
+      }
+      ({ data, error } = await patch(values, scheduleColumns));
+    }
+    if (error) throw new BadRequestException(error.message);
+    if (!data) throw new NotFoundException('Schedule not found');
+    return toSchedule(data as unknown as ScheduleRow);
+  }
+
   async remove(userId: string, id: string): Promise<void> {
     const { data, error } = await this.supabase
       .from('scheduled_transactions')

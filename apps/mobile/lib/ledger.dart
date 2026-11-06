@@ -311,6 +311,73 @@ class Ledger extends ChangeNotifier {
 
   Future<List<Schedule>> schedules() => api.schedules();
 
+  Future<void> saveSchedule({
+    String? id,
+    required String accountId,
+    required String categoryId,
+    required int amount,
+    required String kind,
+    String? note,
+    required String repeat,
+    required int dayOfMonth,
+    required String nextOn,
+    String? atTime,
+  }) async {
+    final body = {
+      'accountId': accountId,
+      'categoryId': categoryId,
+      'amount': amount,
+      'kind': kind,
+      'note': note,
+      'repeat': repeat,
+      'dayOfMonth': dayOfMonth,
+      'nextOn': nextOn,
+      'atTime': atTime,
+    };
+    final localId = id ?? _localId();
+    final account = accounts.where((item) => item.id == accountId).firstOrNull;
+    final category = categories.where((item) => item.id == categoryId).firstOrNull;
+    await _commit(
+      send: () => api.saveSchedule(
+        id: id,
+        accountId: accountId,
+        categoryId: categoryId,
+        amount: amount,
+        kind: kind,
+        note: note,
+        repeat: repeat,
+        dayOfMonth: dayOfMonth,
+        nextOn: nextOn,
+        atTime: atTime,
+      ),
+      method: id == null ? 'POST' : 'PATCH',
+      path: id == null ? '/schedules' : '/schedules/$id',
+      body: body,
+      localId: id == null ? localId : null,
+      apply: () {
+        final saved = Schedule(
+          id: localId,
+          accountId: accountId,
+          accountName: account?.name,
+          categoryId: categoryId,
+          categoryName: category?.name ?? '',
+          amount: amount,
+          kind: kind,
+          note: note,
+          repeat: repeat,
+          dayOfMonth: dayOfMonth,
+          nextOn: nextOn,
+          atTime: atTime,
+        );
+        planned = [
+          for (final schedule in planned)
+            if (schedule.id != localId) schedule,
+          saved,
+        ];
+      },
+    );
+  }
+
   Future<void> deleteSchedule(String id) async {
     await _commit(
       send: () async {

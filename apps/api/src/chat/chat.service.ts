@@ -49,7 +49,7 @@ export class ChatService {
       this.goals.list(userId).catch(() => []),
     ]);
     const latest = messages.at(-1)?.content ?? '';
-    const malayalam = isMalayalam(latest);
+    const malayalam = body.language === 'ml' || (body.language !== 'en' && isMalayalam(latest));
     const instruction = buildChatInstruction({
       clock: describeNow(body.today),
       balance: rupees(summary.balance),
@@ -64,6 +64,7 @@ export class ChatService {
       incomeCategories: categories.filter((category) => category.kind === 'income').map((category) => category.name),
       goals: goals.map((goal) => `${goal.id} ${goal.name}`),
       latest,
+      language: body.language === 'ml' || body.language === 'en' ? body.language : malayalam ? 'ml' : 'en',
     });
     const context = {
       today: body.today,

@@ -9,7 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
-typedef PromptSend = void Function(String text, {bool voice, int seconds});
+typedef PromptSend = void Function(String text, {bool voice, int seconds, String language});
 
 /// Dark prompt box used on the chat screen: a growing field, image preview,
 /// and a send button that becomes a mic when the field is empty.
@@ -72,7 +72,7 @@ class _PromptBoxState extends State<PromptBox> {
     final text = _text.text.trim();
     if (text.isEmpty || widget.loading || _listening) return;
     HapticFeedback.lightImpact();
-    widget.onSend(text);
+    widget.onSend(text, language: _malayalam ? 'ml' : 'en');
     _text.clear();
     setState(() {
       _image = null;

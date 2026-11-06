@@ -125,7 +125,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       balance: summary.balance,
       spentThisMonth: summary.monthExpense,
       accounts: ledger.accounts.length,
-      hidden: widget.lock?.enabled ?? false,
     );
   }
 

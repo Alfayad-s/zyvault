@@ -2,6 +2,7 @@ import 'package:finance_track/ledger.dart';
 import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
 import 'package:finance_track/reminders.dart';
+import 'package:finance_track/screens/schedule_editor.dart';
 import 'package:finance_track/widgets/category_icon.dart';
 import 'package:finance_track/widgets/pull_refresh.dart';
 import 'package:finance_track/widgets/shimmer.dart';
@@ -40,10 +41,49 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
   Future<void> _load() async {
     try {
       final items = await widget.ledger.schedules();
-      if (mounted) setState(() => _items = items);
+      if (mounted) {
+        setState(() {
+          _items = items;
+          _error = null;
+        });
+      }
     } catch (caught) {
-      if (mounted) setState(() => _error = '$caught');
+      if (!mounted) return;
+      final local = [...widget.ledger.planned]..sort((a, b) => a.nextOn.compareTo(b.nextOn));
+      setState(() {
+        if (local.isNotEmpty || widget.ledger.offline) {
+          _items = local;
+          _error = null;
+        } else {
+          _error = '$caught';
+        }
+      });
     }
+  }
+
+  Future<void> _edit({Schedule? existing}) async {
+    if (widget.ledger.accounts.isEmpty) {
+      _snack('Add an account first');
+      return;
+    }
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: const Color(0xFF161616),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) => ScheduleEditor(ledger: widget.ledger, existing: existing),
+    );
+    if (saved == true) {
+      await _load();
+      Reminders.sync(_items ?? const []);
+    }
+  }
+
+  void _snack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _delete(Schedule schedule) async {
@@ -116,7 +156,7 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
               ),
             )
           else if (items.isEmpty)
-            const _Empty()
+            _Empty(onAdd: () => _edit())
           else
             Container(
               decoration: BoxDecoration(
@@ -130,6 +170,7 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
                       const Divider(height: 1, color: Color(0xFF3A3A3C)),
                     _ScheduleRow(
                       schedule: schedule,
+                      onEdit: () => _edit(existing: schedule),
                       onDelete: () => _delete(schedule),
                     ),
                   ],
@@ -139,18 +180,38 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
         ],
       ),
     );
-    if (widget.embedded) return body;
+    final page = Stack(
+      children: [
+        body,
+        Positioned(
+          right: 20,
+          bottom: widget.embedded ? 96 : 24,
+          child: FloatingActionButton(
+            backgroundColor: const Color(0xFFC8F57A),
+            foregroundColor: const Color(0xFF17310C),
+            onPressed: () => _edit(),
+            child: const Icon(LucideIcons.plus),
+          ),
+        ),
+      ],
+    );
+    if (widget.embedded) return page;
     return Scaffold(
       appBar: AppBar(title: const Text('Scheduled & recurring')),
-      body: body,
+      body: page,
     );
   }
 }
 
 class _ScheduleRow extends StatelessWidget {
-  const _ScheduleRow({required this.schedule, required this.onDelete});
+  const _ScheduleRow({
+    required this.schedule,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   final Schedule schedule;
+  final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   @override
@@ -163,6 +224,7 @@ class _ScheduleRow extends StatelessWidget {
         ? 'Every month on day ${schedule.dayOfMonth}$at · next ${formatDate(schedule.nextOn)}'
         : 'Once on ${formatDate(schedule.nextOn)}$at';
     return ListTile(
+      onTap: onEdit,
       contentPadding: const EdgeInsets.fromLTRB(16, 6, 4, 6),
       leading: CategoryIcon(
         name: schedule.categoryName,
@@ -201,17 +263,19 @@ class _ScheduleRow extends StatelessWidget {
 }
 
 class _Empty extends StatelessWidget {
-  const _Empty();
+  const _Empty({required this.onAdd});
+
+  final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(24, 64, 24, 24),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 64, 24, 24),
       child: Column(
         children: [
-          Icon(LucideIcons.calendarClock, color: _muted, size: 44),
-          SizedBox(height: 16),
-          Text(
+          const Icon(LucideIcons.calendarClock, color: _muted, size: 44),
+          const SizedBox(height: 16),
+          const Text(
             'Nothing planned yet',
             style: TextStyle(
               color: Colors.white,
@@ -219,11 +283,20 @@ class _Empty extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-          SizedBox(height: 8),
-          Text(
-            'On the type page, say or type things like\n“every month I get 35k salary on 1st”\nor “next month 6th I will get 5000 from Ravi”',
+          const SizedBox(height: 8),
+          const Text(
+            'Add rent, salary or any payment that happens on a date. You can also say it on the type page.',
             textAlign: TextAlign.center,
             style: TextStyle(color: _muted, height: 1.45),
+          ),
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: onAdd,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFC8F57A),
+              foregroundColor: const Color(0xFF17310C),
+            ),
+            child: const Text('Add a plan'),
           ),
         ],
       ),

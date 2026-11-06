@@ -27,6 +27,7 @@ class _ChatTurn {
     this.review = 'open',
     this.voice = false,
     this.seconds = 0,
+    this.language = 'en',
   });
 
   final String role;
@@ -35,6 +36,7 @@ class _ChatTurn {
   String review;
   final bool voice;
   final int seconds;
+  final String language;
 }
 
 class _ChatScreenState extends State<ChatScreen> {
@@ -72,6 +74,7 @@ class _ChatScreenState extends State<ChatScreen> {
               review: turn.review,
               voice: turn.voice,
               seconds: turn.seconds,
+              language: turn.language,
             ),
           ),
         );
@@ -93,6 +96,7 @@ class _ChatScreenState extends State<ChatScreen> {
               review: turn.review,
               voice: turn.voice,
               seconds: turn.seconds,
+              language: turn.language,
             ),
           ),
         );
@@ -112,6 +116,7 @@ class _ChatScreenState extends State<ChatScreen> {
           review: turn.review,
           voice: turn.voice,
           seconds: turn.seconds,
+          language: turn.language,
         ),
     ]);
   }
@@ -138,7 +143,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _clock = null;
   }
 
-  Future<void> _send(String text, {bool voice = false, int seconds = 0}) async {
+  Future<void> _send(String text, {bool voice = false, int seconds = 0, String language = 'en'}) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || _sending || !_ready) return;
     final thread = _thread;
@@ -147,7 +152,7 @@ class _ChatScreenState extends State<ChatScreen> {
       StoredTurn(role: 'user', content: trimmed),
     ];
     setState(() {
-      _turns.add(_ChatTurn(role: 'user', content: trimmed, voice: voice, seconds: seconds));
+      _turns.add(_ChatTurn(role: 'user', content: trimmed, voice: voice, seconds: seconds, language: language));
       _sending = true;
       _reveal = -1;
     });
@@ -161,11 +166,14 @@ class _ChatScreenState extends State<ChatScreen> {
         messages: [
           for (final turn in turns) {'role': turn.role, 'content': turn.content},
         ],
+        language: language,
       );
       if (!mounted || thread != _thread) return;
       _stopWait();
       setState(() {
-        _turns.add(_ChatTurn(role: 'assistant', content: answer.reply, proposal: answer.proposal));
+        _turns.add(
+          _ChatTurn(role: 'assistant', content: answer.reply, proposal: answer.proposal, language: language),
+        );
         _sending = false;
         _reveal = _turns.length - 1;
       });
@@ -194,6 +202,7 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _speaking = index);
     final problem = await ReplyVoice.speak(
       text,
+      language: _turns[index].language,
       onDone: () {
         if (mounted && _speaking == index) setState(() => _speaking = -1);
       },

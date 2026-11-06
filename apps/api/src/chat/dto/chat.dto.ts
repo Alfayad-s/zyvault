@@ -19,6 +19,10 @@ export class ChatDto {
   @MaxLength(800)
   memory?: string;
 
+  @IsOptional()
+  @IsIn(['en', 'ml'])
+  language?: 'en' | 'ml';
+
   @ArrayMinSize(1)
   @ArrayMaxSize(8)
   @ValidateNested({ each: true })

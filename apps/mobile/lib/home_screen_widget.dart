@@ -21,16 +21,8 @@ class HomeScreenWidget {
     required int balance,
     required int spentThisMonth,
     required int accounts,
-    required bool hidden,
   }) {
     final title = accounts == 1 ? '1 account' : 'All accounts';
-    if (hidden) {
-      return (
-        title: title,
-        balance: '₹ ••••',
-        spent: 'Amounts hidden while app lock is on',
-      );
-    }
     return (
       title: title,
       balance: balance < 0
@@ -44,14 +36,12 @@ class HomeScreenWidget {
     required int balance,
     required int spentThisMonth,
     required int accounts,
-    required bool hidden,
   }) async {
     if (!supported) return;
     final shown = texts(
       balance: balance,
       spentThisMonth: spentThisMonth,
       accounts: accounts,
-      hidden: hidden,
     );
     final key = '${shown.title}|${shown.balance}|${shown.spent}';
     if (key == _shown) return;

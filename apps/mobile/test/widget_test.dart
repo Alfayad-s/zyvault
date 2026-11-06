@@ -14,6 +14,7 @@ import 'package:finance_track/screens/ask_sheet.dart';
 import 'package:finance_track/screens/goals_section.dart';
 import 'package:finance_track/screens/transaction_form_screen.dart';
 import 'package:finance_track/screens/home_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:finance_track/screens/login_screen.dart';
 import 'package:finance_track/screens/onboarding_screen.dart';
 import 'package:finance_track/screens/review_sheet.dart';
@@ -210,6 +211,32 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('₹60,000.00'), findsOneWidget);
+  });
+
+  testWidgets('balance card eye hides and shows the amount', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BalanceCard(
+            balance: 6000000,
+            monthChange: 4500000,
+            onReceive: () {},
+            onSend: () {},
+          ),
+        ),
+      ),
+    );
+    expect(find.text('₹60,000.00'), findsOneWidget);
+    await tester.tap(find.bySemanticsLabel('Hide balance'));
+    await tester.pump();
+    expect(find.text('₹ ••••'), findsOneWidget);
+    expect(find.text('•••• this month'), findsOneWidget);
+    expect(find.text('₹60,000.00'), findsNothing);
+    await tester.tap(find.bySemanticsLabel('Show balance'));
+    await tester.pump();
+    expect(find.text('₹60,000.00'), findsOneWidget);
+    expect(find.text('+ ₹45,000.00 this month'), findsOneWidget);
   });
 
   testWidgets('manual add saves amount, category, account and date', (
@@ -937,26 +964,24 @@ void main() {
     expect(find.text('₹600'), findsOneWidget);
   });
 
-  test('home widget text hides amounts behind the app lock', () {
+  test('home widget keeps the real amounts for the eye to reveal', () {
     final open = HomeScreenWidget.texts(
       balance: 100000,
       spentThisMonth: 91000,
       accounts: 2,
-      hidden: false,
     );
     expect(open, (
       title: 'All accounts',
       balance: '₹1,000',
       spent: 'Spent ₹910 this month',
     ));
-    final locked = HomeScreenWidget.texts(
+    final one = HomeScreenWidget.texts(
       balance: 100000,
       spentThisMonth: 91000,
       accounts: 1,
-      hidden: true,
     );
-    expect(locked.balance, '₹ ••••');
-    expect(locked.title, '1 account');
+    expect(one.balance, '₹1,000');
+    expect(one.title, '1 account');
   });
 
   testWidgets('review sheet lets you fix, drop and then save entries', (
@@ -1568,11 +1593,11 @@ void main() {
       occurredOn: '2026-10-17',
       note: null,
     );
-    await ActivityCache().write('2026-10-01', '2026-11-01', const [item]);
+    await ActivityCache().write('2026-10-01', '2026-11-01', const [item], const []);
     final stored = await ActivityCache().read('2026-10-01', '2026-11-01');
     expect(stored, isNotNull);
-    expect(stored!.single.categoryName, 'Food');
-    expect(stored.single.amount, 49950);
+    expect(stored!.items.single.categoryName, 'Food');
+    expect(stored.items.single.amount, 49950);
     expect(await ActivityCache().read('2026-09-01', '2026-10-01'), isNull);
   });
 

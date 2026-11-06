@@ -19,7 +19,8 @@ class FinanceWidgetProvider : HomeWidgetProvider() {
       return
     }
     val prefs = HomeWidgetPlugin.getData(context)
-    prefs.edit().putBoolean(eyeHiddenKey, !prefs.getBoolean(eyeHiddenKey, false)).apply()
+    val hidden = !prefs.getBoolean(eyeHiddenKey, false)
+    prefs.edit().putBoolean(eyeHiddenKey, hidden).commit()
     val manager = AppWidgetManager.getInstance(context)
     val ids = manager.getAppWidgetIds(android.content.ComponentName(context, javaClass))
     onUpdate(context, manager, ids, prefs)
@@ -36,17 +37,15 @@ class FinanceWidgetProvider : HomeWidgetProvider() {
       val views =
           RemoteViews(context.packageName, R.layout.finance_widget).apply {
             widgetData.getString("widget_title", null)?.let { setTextViewText(R.id.widget_title, it) }
-            val balance = widgetData.getString("widget_balance", null)
-            if (balance != null) {
-              setTextViewText(R.id.widget_balance, if (hidden) "₹ ••••" else balance)
-            }
-            if (hidden) {
-              setTextViewText(R.id.widget_spent, "Spent •••• this month")
-            } else {
-              widgetData.getString("widget_spent", null)?.let {
-                setTextViewText(R.id.widget_spent, it)
-              }
-            }
+            val balance = widgetData.getString("widget_balance", null) ?: "₹—"
+            val spent = widgetData.getString("widget_spent", null) ?: "Open the app once to show your balance"
+            setTextViewText(R.id.widget_balance, if (hidden) "₹ ••••" else balance)
+            setTextViewText(
+                R.id.widget_spent,
+                if (hidden) "Spent •••• this month" else spent,
+            )
+            setTextColor(R.id.widget_balance, 0xFF17310C.toInt())
+            setTextColor(R.id.widget_spent, 0xFF2E5410.toInt())
             setImageViewResource(
                 R.id.widget_eye,
                 if (hidden) R.drawable.widget_eye_off else R.drawable.widget_eye,

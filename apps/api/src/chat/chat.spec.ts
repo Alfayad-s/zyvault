@@ -94,6 +94,34 @@ describe('buildChatInstruction', () => {
     });
     expect(instruction).toContain('Malayalam script only');
   });
+
+  it('uses the language selected on the input', () => {
+    const malayalam = buildChatInstruction({
+      clock: 'Clock: Monday, 19 October 2026, 5:30 PM IST.',
+      balance: '₹1,000',
+      monthIncome: '₹0',
+      monthExpense: '₹0',
+      categories: [],
+      accounts: [],
+      budgets: [],
+      latest: 'how much did I spend',
+      language: 'ml',
+    });
+    const english = buildChatInstruction({
+      clock: 'Clock: Monday, 19 October 2026, 5:30 PM IST.',
+      balance: '₹1,000',
+      monthIncome: '₹0',
+      monthExpense: '₹0',
+      categories: [],
+      accounts: [],
+      budgets: [],
+      latest: 'എത്ര ചെലവായി',
+      language: 'en',
+    });
+    expect(malayalam).toContain('selected Malayalam');
+    expect(english).toContain('selected English');
+    expect(english).not.toContain('Malayalam script only');
+  });
 });
 
 function reply(body: unknown, status = 200) {

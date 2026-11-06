@@ -11,6 +11,7 @@ import 'package:finance_track/widgets/pull_refresh.dart';
 import 'package:finance_track/widgets/shimmer.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 bool _isCurrentMonth(DateTime month) {
   final today = DateTime.now();
@@ -620,7 +621,31 @@ class BalanceCard extends StatefulWidget {
 }
 
 class _BalanceCardState extends State<BalanceCard> {
+  static const _eyeKey = 'home_balance_hidden';
   String? _selectedId;
+  var _hidden = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEye();
+  }
+
+  Future<void> _loadEye() async {
+    try {
+      final hidden = (await SharedPreferences.getInstance()).getBool(_eyeKey) ?? false;
+      if (!mounted || hidden == _hidden) return;
+      setState(() => _hidden = hidden);
+    } catch (_) {}
+  }
+
+  Future<void> _toggleEye() async {
+    final next = !_hidden;
+    setState(() => _hidden = next);
+    try {
+      await (await SharedPreferences.getInstance()).setBool(_eyeKey, next);
+    } catch (_) {}
+  }
 
   Account? get _selected {
     for (final account in widget.accounts) {
@@ -705,7 +730,9 @@ class _BalanceCardState extends State<BalanceCard> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            balance < 0
+                            _hidden
+                                ? '₹ ••••'
+                                : balance < 0
                                 ? '- ₹${formatMoney(balance.abs())}'
                                 : '₹${formatMoney(balance)}',
                             textAlign: TextAlign.center,
@@ -719,7 +746,7 @@ class _BalanceCardState extends State<BalanceCard> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            changeText,
+                            _hidden ? '•••• this month' : changeText,
                             style: const TextStyle(
                               color: Color(0xFF3D7A28),
                               fontSize: 18,
@@ -731,7 +758,30 @@ class _BalanceCardState extends State<BalanceCard> {
                     ),
                   ),
                   const Positioned(left: 12, top: 12, child: _Pin()),
-                  const Positioned(right: 12, top: 12, child: _Pin()),
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: Semantics(
+                      button: true,
+                      label: _hidden ? 'Show balance' : 'Hide balance',
+                      child: GestureDetector(
+                        onTap: _toggleEye,
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            _hidden ? LucideIcons.eyeOff : LucideIcons.eye,
+                            size: 18,
+                            color: const Color(0xFF17310C),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                   const Positioned(left: 12, bottom: 12, child: _Pin()),
                   const Positioned(right: 12, bottom: 12, child: _Pin()),
                 ],

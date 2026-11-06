@@ -467,12 +467,16 @@ class Schedule {
     required this.repeat,
     required this.dayOfMonth,
     required this.nextOn,
+    this.accountId,
     this.accountName,
+    this.categoryId,
     this.atTime,
   });
 
   final String id;
+  final String? accountId;
   final String? accountName;
+  final String? categoryId;
   final String? atTime;
   final String categoryName;
   final int amount;
@@ -494,7 +498,9 @@ class Schedule {
       repeat: json['repeat'] as String,
       dayOfMonth: (json['dayOfMonth'] as num).toInt(),
       nextOn: json['nextOn'] as String,
+      accountId: json['accountId'] as String?,
       accountName: json['accountName'] as String?,
+      categoryId: json['categoryId'] as String?,
       atTime: json['atTime'] as String?,
     );
   }
@@ -508,7 +514,9 @@ class Schedule {
     'repeat': repeat,
     'dayOfMonth': dayOfMonth,
     'nextOn': nextOn,
+    'accountId': accountId,
     'accountName': accountName,
+    'categoryId': categoryId,
     'atTime': atTime,
   };
 }

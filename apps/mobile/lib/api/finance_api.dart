@@ -294,6 +294,7 @@ class FinanceApi {
     required String today,
     required List<Map<String, String>> messages,
     String memory = '',
+    String language = 'en',
   }) async {
     final tail = [
       for (final message
@@ -316,6 +317,7 @@ class FinanceApi {
         body: {
           'today': today,
           'messages': tail,
+          if (language == 'ml' || language == 'en') 'language': language,
           if (remembered.isNotEmpty) 'memory': remembered,
         },
         timeout: const Duration(seconds: 20),
@@ -639,6 +641,36 @@ class FinanceApi {
   Future<List<Schedule>> schedules() async {
     final body = await _send('GET', '/schedules');
     return _list(body, Schedule.fromJson);
+  }
+
+  Future<Schedule> saveSchedule({
+    String? id,
+    required String accountId,
+    required String categoryId,
+    required int amount,
+    required String kind,
+    String? note,
+    required String repeat,
+    required int dayOfMonth,
+    required String nextOn,
+    String? atTime,
+  }) async {
+    final body = await _send(
+      id == null ? 'POST' : 'PATCH',
+      id == null ? '/schedules' : '/schedules/$id',
+      body: {
+        'accountId': accountId,
+        'categoryId': categoryId,
+        'amount': amount,
+        'kind': kind,
+        'note': ?note,
+        'repeat': repeat,
+        'dayOfMonth': dayOfMonth,
+        'nextOn': nextOn,
+        'atTime': atTime,
+      },
+    );
+    return Schedule.fromJson(body as Map<String, dynamic>);
   }
 
   Future<void> deleteSchedule(String id) async {

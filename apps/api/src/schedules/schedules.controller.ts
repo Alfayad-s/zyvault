@@ -6,14 +6,50 @@ import {
   HttpCode,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { IsOptional, Matches } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, Matches } from 'class-validator';
 import type { AuthUser } from '../auth/auth-user.js';
 import { AuthGuard } from '../auth/auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { SchedulesService } from './schedules.service.js';
+
+export class ScheduleDto {
+  @IsUUID()
+  accountId!: string;
+
+  @IsUUID()
+  categoryId!: string;
+
+  @IsInt()
+  @Min(1)
+  amount!: number;
+
+  @IsIn(['income', 'expense'])
+  kind!: 'income' | 'expense';
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  note?: string;
+
+  @IsIn(['once', 'monthly'])
+  repeat!: 'once' | 'monthly';
+
+  @IsInt()
+  @Min(1)
+  @Max(31)
+  dayOfMonth!: number;
+
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  nextOn!: string;
+
+  @IsOptional()
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/)
+  atTime?: string | null;
+}
 
 export class RunSchedulesDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
@@ -32,6 +68,16 @@ export class SchedulesController {
   @Get()
   list(@CurrentUser() user: AuthUser) {
     return this.schedules.list(user.id);
+  }
+
+  @Post()
+  create(@CurrentUser() user: AuthUser, @Body() body: ScheduleDto) {
+    return this.schedules.create(user.id, body);
+  }
+
+  @Patch(':id')
+  update(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() body: ScheduleDto) {
+    return this.schedules.update(user.id, id, body);
   }
 
   @Post('run')
