@@ -1,7 +1,7 @@
 {
-  "versionCode": 6,
-  "versionName": "1.0.5",
-  "notes": "Hide the balance from home. Chat speaks the language you pick. Add and edit plans on Scheduled.",
+  "versionCode": 7,
+  "versionName": "1.0.6",
+  "notes": "The app now talks to the live API at api-zyvault-production.clawdage.com.",
   "alerts": "https://zyvault.clawdage.com/zyvault.apk",
   "basic": "https://zyvault.clawdage.com/zyvault-basic.apk"
 }
