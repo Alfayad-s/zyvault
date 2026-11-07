@@ -72,12 +72,12 @@ export class SchedulesController {
 
   @Post()
   create(@CurrentUser() user: AuthUser, @Body() body: ScheduleDto) {
-    return this.schedules.create(user.id, body);
+    return this.schedules.create(user.id, { ...body, note: body.note ?? null });
   }
 
   @Patch(':id')
   update(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() body: ScheduleDto) {
-    return this.schedules.update(user.id, id, body);
+    return this.schedules.update(user.id, id, { ...body, note: body.note ?? null });
   }
 
   @Post('run')
