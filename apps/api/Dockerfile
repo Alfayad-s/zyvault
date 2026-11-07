@@ -10,7 +10,7 @@ RUN npm ci --include=dev
 
 COPY nest-cli.json tsconfig.json tsconfig.build.json ./
 COPY src ./src
-COPY scripts/railway-start.sh ./scripts/railway-start.sh
+COPY scripts/railway-start.sh scripts/railway-start-worker.sh ./scripts/
 
 # Railway may start this image with pnpm. The script boots the compiled API.
 RUN printf '%s\n' '#!/bin/sh' 'exec sh /app/scripts/railway-start.sh' > /usr/local/bin/pnpm \

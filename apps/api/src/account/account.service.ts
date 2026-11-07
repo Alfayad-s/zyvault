@@ -1,12 +1,16 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { FinanceCache } from '../finance/finance.cache.js';
 import { SUPABASE } from '../supabase/supabase.constants.js';
 
 const page = 400;
 
 @Injectable()
 export class AccountService {
-  constructor(@Inject(SUPABASE) private readonly supabase: SupabaseClient) {}
+  constructor(
+    @Inject(SUPABASE) private readonly supabase: SupabaseClient,
+    private readonly cache: FinanceCache,
+  ) {}
 
   /** Removes one person's money records. Their sign-in and shared categories stay. */
   async clear(userId: string): Promise<void> {
@@ -19,6 +23,7 @@ export class AccountService {
     await this.remove('accounts', 'id', userId);
     await this.remove('categories', 'id', userId);
     await this.remove('push_log', 'key', userId);
+    await this.cache.invalidate(userId);
   }
 
   private async remove(table: string, column: string, userId: string): Promise<void> {

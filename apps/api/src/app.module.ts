@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { FinanceInfraModule, FinanceModule } from './finance/finance.module.js';
 import { AccountModule } from './account/account.module.js';
 import { AccountsModule } from './accounts/accounts.module.js';
 import { AgentModule } from './agent/agent.module.js';
@@ -24,6 +25,7 @@ import { TransactionsModule } from './transactions/transactions.module.js';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    FinanceInfraModule,
     SupabaseModule,
     AuthModule,
     AccountModule,
@@ -40,6 +42,7 @@ import { TransactionsModule } from './transactions/transactions.module.js';
     AskModule,
     ChatModule,
     PushModule,
+    FinanceModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService, StatusService],

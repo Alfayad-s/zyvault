@@ -43,6 +43,11 @@ export const features = [
     icon: 'chat',
   },
   {
+    title: 'A forecast you can check',
+    body: 'The phone can show the next 7 to 90 days, what is safe to spend after rent and savings, and a health score built from your own figures. A purchase stays a what-if until you save it yourself. Estimated income is never treated as money you already have.',
+    icon: 'chart',
+  },
+  {
     title: 'Chat that answers',
     body: 'The assistant answers how the app works, what a budget means, and questions about your month. You can also tell it to log a spend, set a budget, add to a goal or note money lent. It shows the line first. A question that does not save anything still gets an answer.',
     icon: 'spark',
@@ -114,6 +119,11 @@ export const faqs = [
     question: 'How do budgets and goals work?',
     answer:
       'A budget is a monthly limit on a category. zyvault warns you when that category reaches 80% and when it goes over. A goal is an amount you are saving toward. You can add to it by saying so, for example “add 500 to Goa trip”.',
+  },
+  {
+    question: 'Can the advisor move my money?',
+    answer:
+      'No. The intelligence screens estimate cash flow, safe-to-spend and a health score from the records you already keep. A purchase or savings change is a what-if until you save a real line yourself. Estimated income is not treated as money you have.',
   },
   {
     question: 'What can I ask the chat?',

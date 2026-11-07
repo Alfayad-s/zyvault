@@ -1,7 +1,7 @@
 {
-  "versionCode": 7,
-  "versionName": "1.0.6",
-  "notes": "The app now talks to the live API at api-zyvault-production.clawdage.com.",
+  "versionCode": 8,
+  "versionName": "1.0.7",
+  "notes": "Chat answers from your real figures. Intelligence adds the forecast, safe-to-spend and health.",
   "alerts": "https://zyvault.clawdage.com/zyvault.apk",
   "basic": "https://zyvault.clawdage.com/zyvault-basic.apk"
 }

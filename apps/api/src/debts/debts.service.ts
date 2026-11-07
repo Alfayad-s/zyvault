@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { FinanceCache } from '../finance/finance.cache.js';
 import { allRows } from '../supabase/all-rows.js';
 import { SUPABASE } from '../supabase/supabase.constants.js';
 import {
@@ -46,7 +47,10 @@ function toEntry(row: DebtRow): DebtEntry {
 
 @Injectable()
 export class DebtsService {
-  constructor(@Inject(SUPABASE) private readonly supabase: SupabaseClient) {}
+  constructor(
+    @Inject(SUPABASE) private readonly supabase: SupabaseClient,
+    private readonly cache: FinanceCache,
+  ) {}
 
   async entries(userId: string): Promise<DebtEntry[]> {
     const rows = await allRows<DebtRow>((from, to) =>
@@ -98,6 +102,7 @@ export class DebtsService {
     if (error || !data) {
       throw new BadRequestException(error?.message ?? 'Could not save that');
     }
+    await this.cache.invalidate(userId);
     return toEntry(data as DebtRow);
   }
 
@@ -110,6 +115,7 @@ export class DebtsService {
       .select('id');
     if (error) throw new BadRequestException(error.message);
     if (!data || data.length === 0) throw new NotFoundException('Entry not found');
+    await this.cache.invalidate(userId);
   }
 
   private async assertAccount(userId: string, accountId: string) {

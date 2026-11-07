@@ -5,6 +5,7 @@ import { AuthModule } from '../auth/auth.module.js';
 import { BudgetsModule } from '../budgets/budgets.module.js';
 import { CategoriesModule } from '../categories/categories.module.js';
 import { DebtsModule } from '../debts/debts.module.js';
+import { FinanceModule } from '../finance/finance.module.js';
 import { GoalsModule } from '../goals/goals.module.js';
 import { SchedulesModule } from '../schedules/schedules.module.js';
 import { SummaryModule } from '../summary/summary.module.js';
@@ -26,6 +27,7 @@ import { ChatService } from './chat.service.js';
     GoalsModule,
     DebtsModule,
     SchedulesModule,
+    FinanceModule,
   ],
   controllers: [ChatController],
   providers: [ChatService],

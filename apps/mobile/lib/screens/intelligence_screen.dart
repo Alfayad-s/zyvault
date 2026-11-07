@@ -1,0 +1,530 @@
+import 'package:finance_track/api/finance_api.dart';
+import 'package:finance_track/money.dart';
+import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+
+const _ink = Color(0xFF17310C);
+const _lime = Color(0xFFC8F57A);
+const _card = Color(0xFFF4F6F1);
+
+class IntelligenceScreen extends StatelessWidget {
+  const IntelligenceScreen({super.key, required this.api});
+
+  final FinanceApi api;
+
+  @override
+  Widget build(BuildContext context) {
+    final pages = <_Destination>[
+      _Destination('Dashboard', 'Balance, month and plans', LucideIcons.layoutDashboard, FinanceOverviewScreen(api: api)),
+      _Destination('Cash flow', '7 to 90 days, confirmed and estimated', LucideIcons.chartNoAxesCombined, FinanceForecastScreen(api: api)),
+      _Destination('Safe to spend', 'What is left after essentials', LucideIcons.wallet, FinanceSafeScreen(api: api)),
+      _Destination('Health', 'A score with the working shown', LucideIcons.heartPulse, FinanceHealthScreen(api: api)),
+      _Destination('Purchase', 'See a one-time cost on the forecast', LucideIcons.shoppingBag, FinanceSimulatorScreen(api: api, kind: 'purchase', title: 'Purchase simulator')),
+      _Destination('Savings', 'See a monthly set-aside', LucideIcons.piggyBank, FinanceSimulatorScreen(api: api, kind: 'savings_target', title: 'Savings simulator')),
+      _Destination('Insights', 'Short notes from your own figures', LucideIcons.lightbulb, FinanceInsightsScreen(api: api)),
+      _Destination('Unusual lines', 'Compared with your history, not fraud', LucideIcons.search, FinanceAnomaliesScreen(api: api)),
+    ];
+    return Scaffold(
+      appBar: AppBar(title: const Text('Intelligence')),
+      body: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        itemCount: pages.length + 1,
+        separatorBuilder: (_, _) => const SizedBox(height: 8),
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return const Padding(
+              padding: EdgeInsets.only(bottom: 4),
+              child: Text('Ask a question in Chat. These screens show the same figures.'),
+            );
+          }
+          final item = pages[index - 1];
+          return ListTile(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            tileColor: _card,
+            leading: Icon(item.icon, color: _ink),
+            title: Text(item.title),
+            subtitle: Text(item.subtitle),
+            trailing: const Icon(LucideIcons.chevronRight),
+            onTap: () {
+              Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => item.page));
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _Destination {
+  const _Destination(this.title, this.subtitle, this.icon, this.page);
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Widget page;
+}
+
+class FinanceOverviewScreen extends StatelessWidget {
+  const FinanceOverviewScreen({super.key, required this.api});
+  final FinanceApi api;
+
+  @override
+  Widget build(BuildContext context) {
+    return _FinancePage(
+      title: 'Dashboard',
+      load: api.financeOverview,
+      builder: (data) {
+        final categories = (data['categories'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+        final upcoming = (data['upcoming'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+        return [
+          _MoneyCard('Balance', data['balance'] as int? ?? 0, 'Recorded cash. Lending is separate.'),
+          _Pair('This month in', data['monthIncome'] as int? ?? 0, 'This month out', data['monthExpense'] as int? ?? 0),
+          _Line('Left this month', _money(data['monthSavings'] as int? ?? 0)),
+          _Line('Monthly plans', _money(data['recurringExpense'] as int? ?? 0)),
+          _Line('Others owe you', _money(data['outstandingLent'] as int? ?? 0)),
+          _Line('You owe others', _money(data['outstandingBorrowed'] as int? ?? 0)),
+          if (categories.isEmpty) const _Empty('No category totals this month.') else ...[
+            const _Heading('Categories'),
+            for (final item in categories.take(6))
+              _Line('${item['name']} · ${item['kind']}', _money(item['total'] as int? ?? 0)),
+          ],
+          const _Heading('Confirmed plans, next 30 days'),
+          if (upcoming.isEmpty) const _Empty('No saved plans in the next 30 days.') else
+            for (final item in upcoming.take(8))
+              _Line('${item['date']} · ${item['categoryName']}', '${item['certainty']} ${_money(item['kind'] == 'expense' ? -(item['amount'] as int? ?? 0) : item['amount'] as int? ?? 0)}'),
+        ];
+      },
+    );
+  }
+}
+
+class FinanceForecastScreen extends StatefulWidget {
+  const FinanceForecastScreen({super.key, required this.api});
+  final FinanceApi api;
+
+  @override
+  State<FinanceForecastScreen> createState() => _FinanceForecastScreenState();
+}
+
+class _FinanceForecastScreenState extends State<FinanceForecastScreen> {
+  var _days = 30;
+
+  @override
+  Widget build(BuildContext context) {
+    return _FinancePage(
+      title: 'Cash flow',
+      load: () => widget.api.financeForecast(_days),
+      header: Wrap(
+        spacing: 8,
+        children: [
+          for (final days in [7, 15, 30, 60, 90])
+            ChoiceChip(
+              label: Text('$days days'),
+              selected: _days == days,
+              onSelected: (_) => setState(() => _days = days),
+            ),
+        ],
+      ),
+      builder: (data) {
+        final points = (data['points'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+        final assumptions = (data['assumptions'] as List<dynamic>? ?? []).map((item) => '$item').toList();
+        return [
+          _MoneyCard('Projected end', data['endBalance'] as int? ?? 0, 'Estimated income is not added.'),
+          _Pair('Confirmed in', data['confirmedIncome'] as int? ?? 0, 'Confirmed out', data['confirmedExpense'] as int? ?? 0),
+          _Pair('Estimated in', data['estimatedIncome'] as int? ?? 0, 'Estimated out', data['estimatedExpense'] as int? ?? 0),
+          for (final line in assumptions) _Note(line),
+          const _Heading('Daily balance'),
+          if (points.isEmpty) const _Empty('No days in this forecast.') else
+            for (final point in points.take(12))
+              _Line(
+                '${point['date']}',
+                'end ${_money(point['projectedBalance'] as int? ?? 0)} · est out ${_money(point['estimatedOut'] as int? ?? 0)}',
+              ),
+        ];
+      },
+    );
+  }
+}
+
+class FinanceSafeScreen extends StatefulWidget {
+  const FinanceSafeScreen({super.key, required this.api});
+  final FinanceApi api;
+
+  @override
+  State<FinanceSafeScreen> createState() => _FinanceSafeScreenState();
+}
+
+class _FinanceSafeScreenState extends State<FinanceSafeScreen> {
+  final _reserve = TextEditingController();
+  var _saving = false;
+
+  @override
+  void dispose() {
+    _reserve.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _FinancePage(
+      title: 'Safe to spend',
+      load: widget.api.financeSafe,
+      header: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _reserve,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Emergency reserve, rupees'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            onPressed: _saving
+                ? null
+                : () async {
+                    final amount = parseMoney(_reserve.text.trim());
+                    if (amount == null && _reserve.text.trim() != '0') return;
+                    setState(() => _saving = true);
+                    try {
+                      await widget.api.saveFinanceProfile(amount ?? 0);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reserve saved. Pull to refresh.')));
+                      }
+                    } on FinanceException catch (error) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message)));
+                      }
+                    } finally {
+                      if (mounted) setState(() => _saving = false);
+                    }
+                  },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+      builder: (data) {
+        final lines = (data['lines'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+        return [
+          _MoneyCard('You can spend', data['safeToSpend'] as int? ?? 0, 'About ${_money(data['daily'] as int? ?? 0)} a day for ${data['daysLeft']} days.'),
+          for (final line in lines) _Line('${line['label']}', '${_money(line['amount'] as int? ?? 0)}\n${line['note']}'),
+        ];
+      },
+    );
+  }
+}
+
+class FinanceHealthScreen extends StatelessWidget {
+  const FinanceHealthScreen({super.key, required this.api});
+  final FinanceApi api;
+
+  @override
+  Widget build(BuildContext context) {
+    return _FinancePage(
+      title: 'Health',
+      load: api.financeHealth,
+      builder: (data) {
+        final score = data['score'];
+        final components = (data['components'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+        return [
+          _MoneyCard(score == null ? 'Not enough yet' : '$score / 100', 0, 'Blank parts are left out of the average. The card amount is not money.'),
+          for (final item in components)
+            _Line(
+              '${item['label']} · ${item['score'] ?? 'left out'}',
+              'Weight ${item['weight']}. ${item['detail']}',
+            ),
+        ];
+      },
+    );
+  }
+}
+
+class FinanceInsightsScreen extends StatelessWidget {
+  const FinanceInsightsScreen({super.key, required this.api});
+  final FinanceApi api;
+
+  @override
+  Widget build(BuildContext context) {
+    return _FinancePage(
+      title: 'Insights',
+      load: api.financeInsights,
+      builder: (data) {
+        final items = (data['items'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+        if (items.isEmpty) return [const _Empty('No insights yet.')];
+        return [
+          for (final item in items) ...[
+            _Heading('${item['title']}'),
+            Text('${item['body']}'),
+            for (final evidence in (item['evidence'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>())
+              _Line('${evidence['label']}', evidence['amount'] == null ? '' : _money(evidence['amount'] as int)),
+          ],
+        ];
+      },
+    );
+  }
+}
+
+class FinanceAnomaliesScreen extends StatelessWidget {
+  const FinanceAnomaliesScreen({super.key, required this.api});
+  final FinanceApi api;
+
+  @override
+  Widget build(BuildContext context) {
+    return _FinancePage(
+      title: 'Unusual lines',
+      load: api.financeAnomalies,
+      builder: (data) {
+        final items = (data['items'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+        if (items.isEmpty) return [const _Empty('Nothing looks unusual against your own history.')];
+        return [
+          const _Note('These are comparisons with your past lines. They are not fraud alerts.'),
+          for (final item in items)
+            _Line('${item['severity']} · ${item['categoryName'] ?? item['kind']}', '${item['reason']}'),
+        ];
+      },
+    );
+  }
+}
+
+
+class FinanceSimulatorScreen extends StatefulWidget {
+  const FinanceSimulatorScreen({super.key, required this.api, required this.kind, required this.title});
+  final FinanceApi api;
+  final String kind;
+  final String title;
+
+  @override
+  State<FinanceSimulatorScreen> createState() => _FinanceSimulatorScreenState();
+}
+
+class _FinanceSimulatorScreenState extends State<FinanceSimulatorScreen> {
+  final _amount = TextEditingController();
+  final _months = TextEditingController(text: '12');
+  Map<String, dynamic>? _result;
+  var _error = '';
+  var _busy = false;
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _months.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final needsMonths = widget.kind == 'emi';
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.title)),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const _Note('This does not change your accounts. Income changes stay assumptions.'),
+          TextField(
+            controller: _amount,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Amount in rupees'),
+          ),
+          if (needsMonths)
+            TextField(
+              controller: _months,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Months'),
+            ),
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: _busy
+                ? null
+                : () async {
+                    final amount = parseMoney(_amount.text.trim());
+                    if (amount == null) {
+                      setState(() => _error = 'Enter an amount such as 30000 or 30000.00');
+                      return;
+                    }
+                    setState(() {
+                      _busy = true;
+                      _error = '';
+                    });
+                    try {
+                      final result = await widget.api.financeSimulate(
+                        kind: widget.kind,
+                        amount: amount,
+                        months: needsMonths ? int.tryParse(_months.text) : null,
+                      );
+                      if (mounted) setState(() => _result = result);
+                    } on FinanceException catch (error) {
+                      if (mounted) setState(() => _error = error.message);
+                    } finally {
+                      if (mounted) setState(() => _busy = false);
+                    }
+                  },
+            child: const Text('Show the difference'),
+          ),
+          if (_error.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error)),
+          if (_result != null) ...[
+            const SizedBox(height: 16),
+            _Line('If you leave things', _money(_result!['baselineEnd'] as int? ?? 0)),
+            _Line('After this change', _money(_result!['scenarioEnd'] as int? ?? 0)),
+            _Line('Difference', _money(_result!['delta'] as int? ?? 0)),
+            for (final line in (_result!['assumptions'] as List<dynamic>? ?? [])) _Note('$line'),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _FinancePage extends StatefulWidget {
+  const _FinancePage({required this.title, required this.load, required this.builder, this.header});
+  final String title;
+  final Future<Map<String, dynamic>> Function() load;
+  final List<Widget> Function(Map<String, dynamic> data) builder;
+  final Widget? header;
+
+  @override
+  State<_FinancePage> createState() => _FinancePageState();
+}
+
+class _FinancePageState extends State<_FinancePage> {
+  Map<String, dynamic>? _data;
+  var _error = '';
+  var _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FinancePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.load != widget.load) _reload();
+  }
+
+  Future<void> _reload() async {
+    setState(() {
+      _loading = true;
+      _error = '';
+    });
+    try {
+      final data = await widget.load();
+      if (mounted) setState(() => _data = data);
+    } on FinanceException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.title)),
+      body: RefreshIndicator(
+        onRefresh: _reload,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          children: [
+            if (widget.header != null) ...[widget.header!, const SizedBox(height: 12)],
+            if (_loading) const LinearProgressIndicator(),
+            if (_error.isNotEmpty) Text(_error),
+            if (_data != null) ...widget.builder(_data!),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MoneyCard extends StatelessWidget {
+  const _MoneyCard(this.label, this.amount, this.note);
+  final String label;
+  final int amount;
+  final String note;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: _lime, borderRadius: BorderRadius.circular(20)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(color: _ink)),
+          if (amount != 0 || label == 'Balance' || label == 'You can spend' || label == 'Projected end')
+            Text('₹${formatMoney(amount)}', style: const TextStyle(color: _ink, fontSize: 28, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text(note, style: const TextStyle(color: _ink)),
+        ],
+      ),
+    );
+  }
+}
+
+class _Pair extends StatelessWidget {
+  const _Pair(this.left, this.leftAmount, this.right, this.rightAmount);
+  final String left;
+  final int leftAmount;
+  final String right;
+  final int rightAmount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(child: _Line(left, _money(leftAmount))),
+          Expanded(child: _Line(right, _money(rightAmount))),
+        ],
+      ),
+    );
+  }
+}
+
+class _Line extends StatelessWidget {
+  const _Line(this.title, this.value);
+  final String title;
+  final String value;
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+        Text(value),
+      ]),
+    );
+  }
+}
+
+class _Heading extends StatelessWidget {
+  const _Heading(this.text);
+  final String text;
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 8),
+      child: Text(text, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+    );
+  }
+}
+
+class _Note extends StatelessWidget {
+  const _Note(this.text);
+  final String text;
+  @override
+  Widget build(BuildContext context) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(text));
+}
+
+class _Empty extends StatelessWidget {
+  const _Empty(this.text);
+  final String text;
+  @override
+  Widget build(BuildContext context) => Padding(padding: const EdgeInsets.symmetric(vertical: 24), child: Text(text));
+}
+
+String _money(int paise) => '₹${formatMoney(paise)}';

@@ -799,6 +799,84 @@ class FinanceApi {
     return rows.length;
   }
 
+  Future<Map<String, dynamic>> financeOverview() async {
+    final body = await _send('GET', '/finance/overview');
+    return body as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> financeForecast(int days) async {
+    final body = await _send('GET', '/finance/forecast?days=$days');
+    return body as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> financeSafe() async {
+    final body = await _send('GET', '/finance/safe-to-spend');
+    return body as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> financeHealth() async {
+    final body = await _send('GET', '/finance/health');
+    return body as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> financeInsights() async {
+    final body = await _send('GET', '/finance/insights');
+    return body as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> financeAnomalies() async {
+    final body = await _send('GET', '/finance/anomalies');
+    return body as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> financeProfile() async {
+    final body = await _send('GET', '/finance/profile');
+    return body as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> saveFinanceProfile(int emergencyReserve) async {
+    final body = await _send('PUT', '/finance/profile', body: {
+      'emergencyReserve': emergencyReserve,
+    });
+    return body as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> financeSimulate({
+    required String kind,
+    required int amount,
+    int? months,
+  }) async {
+    final body = await _send('POST', '/finance/simulate', body: {
+      'kind': kind,
+      'amount': amount,
+      'months': ?months,
+    });
+    return body as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> financeChat(
+    String message, {
+    required String language,
+    String? conversationId,
+  }) async {
+    final body = await _send('POST', '/finance/chat', body: {
+      'message': message,
+      'language': language,
+      'conversationId': ?conversationId,
+    });
+    return body as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> financeChats() async {
+    final body = await _send('GET', '/finance/chat');
+    return body as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> financeChatThread(String id) async {
+    final body = await _send('GET', '/finance/chat/$id');
+    return body as Map<String, dynamic>;
+  }
+
   Future<Object?> dispatch(
     String method,
     String path, [

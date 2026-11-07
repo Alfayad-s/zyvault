@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { iconUrl } from '../categories/icons.js';
+import { FinanceCache } from '../finance/finance.cache.js';
 import { allRows } from '../supabase/all-rows.js';
 import { SUPABASE } from '../supabase/supabase.constants.js';
 import { GoalDto, GoalEntryDto } from './dto/goal.dto.js';
@@ -47,6 +48,7 @@ export class GoalsService {
   constructor(
     @Inject(SUPABASE) private readonly supabase: SupabaseClient,
     private readonly config: ConfigService,
+    private readonly cache: FinanceCache,
   ) {}
 
   async list(userId: string): Promise<Goal[]> {
@@ -81,6 +83,7 @@ export class GoalsService {
       .single();
     if (missingGoalTables(error)) throw this.schemaMissing();
     if (error || !data) throw new BadRequestException(error?.message ?? 'Could not create the goal');
+    await this.cache.invalidate(userId);
     return this.toGoal(data as GoalRow, 0);
   }
 
@@ -94,6 +97,7 @@ export class GoalsService {
       .maybeSingle();
     if (error) throw new BadRequestException(error.message);
     if (!data) throw new NotFoundException('Goal not found');
+    await this.cache.invalidate(userId);
     return this.toGoal(data as GoalRow, await this.savedIn(userId, id));
   }
 
@@ -106,6 +110,7 @@ export class GoalsService {
       .select('id');
     if (error) throw new BadRequestException(error.message);
     if (!data || data.length === 0) throw new NotFoundException('Goal not found');
+    await this.cache.invalidate(userId);
   }
 
   async entries(userId: string, goalId: string): Promise<GoalEntry[]> {
@@ -148,6 +153,7 @@ export class GoalsService {
       .select(entryColumns)
       .single();
     if (error || !data) throw new BadRequestException(error?.message ?? 'Could not save that');
+    await this.cache.invalidate(userId);
     return { entry: toEntry(data as EntryRow), goal: { ...goal, saved: goal.saved + amount } };
   }
 
@@ -160,6 +166,7 @@ export class GoalsService {
       .select('id');
     if (error) throw new BadRequestException(error.message);
     if (!data || data.length === 0) throw new NotFoundException('Entry not found');
+    await this.cache.invalidate(userId);
   }
 
   private async savedIn(userId: string, goalId: string): Promise<number> {

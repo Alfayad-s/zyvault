@@ -1,7 +1,7 @@
 import { Frame } from '../components/frame';
 import { faqs, features, steps } from '../lib/site';
 
-const marks = ['Cash', 'Every bank', 'UPI', 'Voice', 'Chat', 'Offline'];
+const marks = ['Cash', 'Every bank', 'UPI', 'Voice', 'Chat', 'Forecast'];
 
 function Icon({ name }) {
   const paths = {
@@ -16,6 +16,7 @@ function Icon({ name }) {
     widget: 'M4 4h7v7H4V4zm9 0h7v5h-7V4zM4 13h7v7H4v-7zm9 3h7v4h-7v-4z',
     phone: 'M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm4 16.5a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4z',
     file: 'M6 2h8l4 4v16H6V2zm8 1.5V7h3.5L14 3.5zM8 11h8v1.5H8V11zm0 3.5h8V16H8v-1.5z',
+    chart: 'M4 19V5h2v12h12v2H4zm3-3 3-4 3 2 4-6 1.5 1-5.2 7.2-3.1-2.1L8.2 17 7 16z',
   };
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">

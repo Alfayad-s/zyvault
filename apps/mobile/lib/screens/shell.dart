@@ -14,6 +14,7 @@ import 'package:finance_track/reminders.dart';
 import 'package:finance_track/screens/accounts_screen.dart';
 import 'package:finance_track/screens/chat_screen.dart';
 import 'package:finance_track/screens/home_screen.dart';
+import 'package:finance_track/screens/intelligence_screen.dart';
 import 'package:finance_track/screens/profile_screen.dart';
 import 'package:finance_track/screens/scheduled_screen.dart';
 import 'package:finance_track/screens/transaction_form_screen.dart';
@@ -314,6 +315,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         ),
         title: Text(FinanceBottomBar.labels[_index]),
         actions: [
+          IconButton(
+            tooltip: 'Intelligence',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (context) => IntelligenceScreen(api: widget.api),
+                ),
+              );
+            },
+            icon: const Icon(LucideIcons.chartNoAxesCombined),
+          ),
           IconButton(
             tooltip: 'Chat',
             onPressed: () {

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { monthlyAfter } from '../agent/spend.js';
+import { FinanceCache } from '../finance/finance.cache.js';
 import { findCategory } from '../categories/categories.service.js';
 import { SUPABASE } from '../supabase/supabase.constants.js';
 import { TransactionsService } from '../transactions/transactions.service.js';
@@ -127,6 +128,7 @@ export class SchedulesService {
   constructor(
     @Inject(SUPABASE) private readonly supabase: SupabaseClient,
     private readonly transactions: TransactionsService,
+    private readonly cache: FinanceCache,
   ) {}
 
   async list(userId: string): Promise<Schedule[]> {
@@ -169,6 +171,7 @@ export class SchedulesService {
     if (error || !data) {
       throw new BadRequestException(error?.message ?? 'Could not save the schedule');
     }
+    await this.cache.invalidate(userId);
     return toSchedule(data as unknown as ScheduleRow);
   }
 
@@ -203,6 +206,7 @@ export class SchedulesService {
     }
     if (error) throw new BadRequestException(error.message);
     if (!data) throw new NotFoundException('Schedule not found');
+    await this.cache.invalidate(userId);
     return toSchedule(data as unknown as ScheduleRow);
   }
 
@@ -215,6 +219,7 @@ export class SchedulesService {
       .select('id');
     if (error) throw new BadRequestException(error.message);
     if (!data || data.length === 0) throw new NotFoundException('Schedule not found');
+    await this.cache.invalidate(userId);
   }
 
   /**
@@ -272,6 +277,7 @@ export class SchedulesService {
         }
       }
     }
+    if (entries.length > 0) await this.cache.invalidate(userId);
     return { posted: entries.length, entries };
   }
 

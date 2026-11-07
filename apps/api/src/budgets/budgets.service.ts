@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { findCategory } from '../categories/categories.service.js';
+import { FinanceCache } from '../finance/finance.cache.js';
 import { monthRange } from '../summary/month.js';
 import { allRows } from '../supabase/all-rows.js';
 import { SUPABASE } from '../supabase/supabase.constants.js';
@@ -61,7 +62,10 @@ export function spentByCategory(rows: { category_id: string; amount: number }[])
 
 @Injectable()
 export class BudgetsService {
-  constructor(@Inject(SUPABASE) private readonly supabase: SupabaseClient) {}
+  constructor(
+    @Inject(SUPABASE) private readonly supabase: SupabaseClient,
+    private readonly cache: FinanceCache,
+  ) {}
 
   async list(userId: string, month: string): Promise<Budget[]> {
     let rows = await this.rows(userId, month);
@@ -93,6 +97,7 @@ export class BudgetsService {
       throw new BadRequestException(error?.message ?? 'Could not save the budget');
     }
     const spent = await this.spent(userId, input.month);
+    await this.cache.invalidate(userId);
     return toBudget(data as BudgetRow, spent.get(input.categoryId) ?? 0);
   }
 
@@ -105,6 +110,7 @@ export class BudgetsService {
       .select('id');
     if (error) throw new BadRequestException(error.message);
     if (!data || data.length === 0) throw new NotFoundException('Budget not found');
+    await this.cache.invalidate(userId);
   }
 
   private async rows(userId: string, month: string): Promise<BudgetRow[]> {

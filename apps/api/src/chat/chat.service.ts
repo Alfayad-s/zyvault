@@ -8,6 +8,8 @@ import { BudgetsService } from '../budgets/budgets.service.js';
 import type { Category } from '../categories/categories.service.js';
 import { CategoriesService } from '../categories/categories.service.js';
 import { DebtsService } from '../debts/debts.service.js';
+import { asksAboutMoney } from '../finance/advisor.graph.js';
+import { FinanceService } from '../finance/finance.service.js';
 import type { Goal } from '../goals/goals.js';
 import { GoalsService } from '../goals/goals.service.js';
 import { SchedulesService } from '../schedules/schedules.service.js';
@@ -32,6 +34,7 @@ export class ChatService {
     private readonly goals: GoalsService,
     private readonly debts: DebtsService,
     private readonly schedules: SchedulesService,
+    private readonly finance?: FinanceService,
   ) {}
 
   async reply(userId: string, body: ChatDto): Promise<{ reply: string; proposal: unknown }> {
@@ -50,6 +53,10 @@ export class ChatService {
     ]);
     const latest = messages.at(-1)?.content ?? '';
     const malayalam = body.language === 'ml' || (body.language !== 'en' && isMalayalam(latest));
+    if (this.finance && asksAboutMoney(latest)) {
+      const answer = await this.finance.chat(userId, latest, malayalam ? 'ml' : 'en');
+      return { reply: answer.reply, proposal: null };
+    }
     const instruction = buildChatInstruction({
       clock: describeNow(body.today),
       balance: rupees(summary.balance),

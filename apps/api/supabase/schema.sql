@@ -234,4 +234,206 @@ alter table public.push_log enable row level security;
 grant select, insert, update, delete on public.device_tokens to service_role;
 grant select, insert, update, delete on public.push_log to service_role;
 
+-- Financial intelligence. Additive tables. Amounts are paise.
+create table if not exists public.financial_profiles (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  emergency_reserve integer not null default 0 check (emergency_reserve >= 0),
+  monthly_discretionary_limit integer check (monthly_discretionary_limit is null or monthly_discretionary_limit >= 0),
+  essential_categories jsonb not null default '["rent","bills","emi","insurance","recharge"]'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.financial_forecasts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  horizon_days integer not null check (horizon_days in (7, 15, 30, 60, 90)),
+  assumptions jsonb not null default '[]'::jsonb,
+  generated_at timestamptz not null default now()
+);
+create index if not exists financial_forecasts_user_idx
+  on public.financial_forecasts (user_id, horizon_days, generated_at desc);
+
+create table if not exists public.forecast_daily_points (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  forecast_id uuid not null references public.financial_forecasts (id) on delete cascade,
+  date date not null,
+  projected_balance integer not null,
+  confirmed_in integer not null default 0,
+  confirmed_out integer not null default 0,
+  estimated_in integer not null default 0,
+  estimated_out integer not null default 0,
+  unique (forecast_id, date)
+);
+create index if not exists forecast_daily_points_user_idx on public.forecast_daily_points (user_id, forecast_id);
+
+create table if not exists public.financial_insights (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  title text not null,
+  body text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists financial_insights_user_idx on public.financial_insights (user_id, created_at desc);
+
+create table if not exists public.insight_evidence (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  insight_id uuid not null references public.financial_insights (id) on delete cascade,
+  label text not null,
+  amount integer
+);
+
+create table if not exists public.financial_scenarios (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  kind text not null,
+  input jsonb not null,
+  result jsonb not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists financial_scenarios_user_idx on public.financial_scenarios (user_id, created_at desc);
+
+create table if not exists public.spending_anomalies (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  fingerprint text not null,
+  kind text not null,
+  severity text not null check (severity in ('info', 'watch')),
+  reason text not null,
+  amount integer,
+  occurred_on date,
+  category_name text,
+  transaction_id uuid,
+  detected_at timestamptz not null default now(),
+  unique (user_id, fingerprint)
+);
+
+create table if not exists public.ai_conversations (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  title text not null,
+  updated_at timestamptz not null default now()
+);
+create index if not exists ai_conversations_user_idx on public.ai_conversations (user_id, updated_at desc);
+
+create table if not exists public.ai_messages (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  conversation_id uuid not null references public.ai_conversations (id) on delete cascade,
+  role text not null check (role in ('user', 'assistant')),
+  body text not null,
+  language text not null default 'en',
+  created_at timestamptz not null default now()
+);
+create index if not exists ai_messages_conversation_idx on public.ai_messages (conversation_id, created_at);
+
+create table if not exists public.agent_runs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  conversation_id uuid references public.ai_conversations (id) on delete set null,
+  status text not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.agent_tool_calls (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  run_id uuid not null references public.agent_runs (id) on delete cascade,
+  tool_name text not null,
+  duration_ms integer,
+  status text not null
+);
+
+create table if not exists public.financial_feedback (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  rating text not null check (rating in ('up', 'down')),
+  insight_id uuid references public.financial_insights (id) on delete set null,
+  message_id uuid references public.ai_messages (id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.finance_jobs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  queue text not null,
+  status text not null check (status in ('queued', 'running', 'completed', 'failed')),
+  idempotency_key text not null,
+  error text,
+  result_id uuid,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, idempotency_key)
+);
+create index if not exists finance_jobs_user_idx on public.finance_jobs (user_id, created_at desc);
+
+alter table public.financial_profiles enable row level security;
+alter table public.financial_forecasts enable row level security;
+alter table public.forecast_daily_points enable row level security;
+alter table public.financial_insights enable row level security;
+alter table public.insight_evidence enable row level security;
+alter table public.financial_scenarios enable row level security;
+alter table public.spending_anomalies enable row level security;
+alter table public.ai_conversations enable row level security;
+alter table public.ai_messages enable row level security;
+alter table public.agent_runs enable row level security;
+alter table public.agent_tool_calls enable row level security;
+alter table public.financial_feedback enable row level security;
+alter table public.finance_jobs enable row level security;
+
+grant select, insert, update, delete on public.financial_profiles to authenticated, service_role;
+grant select, insert, update, delete on public.financial_forecasts to authenticated, service_role;
+grant select, insert, update, delete on public.forecast_daily_points to authenticated, service_role;
+grant select, insert, update, delete on public.financial_insights to authenticated, service_role;
+grant select, insert, update, delete on public.insight_evidence to authenticated, service_role;
+grant select, insert, update, delete on public.financial_scenarios to authenticated, service_role;
+grant select, insert, update, delete on public.spending_anomalies to authenticated, service_role;
+grant select, insert, update, delete on public.ai_conversations to authenticated, service_role;
+grant select, insert, update, delete on public.ai_messages to authenticated, service_role;
+grant select, insert, update, delete on public.agent_runs to authenticated, service_role;
+grant select, insert, update, delete on public.agent_tool_calls to authenticated, service_role;
+grant select, insert, update, delete on public.financial_feedback to authenticated, service_role;
+grant select, insert, update, delete on public.finance_jobs to authenticated, service_role;
+
+drop policy if exists "users manage their financial profile" on public.financial_profiles;
+create policy "users manage their financial profile" on public.financial_profiles
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "users manage their forecasts" on public.financial_forecasts;
+create policy "users manage their forecasts" on public.financial_forecasts
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "users manage their forecast points" on public.forecast_daily_points;
+create policy "users manage their forecast points" on public.forecast_daily_points
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "users manage their insights" on public.financial_insights;
+create policy "users manage their insights" on public.financial_insights
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "users manage their insight evidence" on public.insight_evidence;
+create policy "users manage their insight evidence" on public.insight_evidence
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "users manage their scenarios" on public.financial_scenarios;
+create policy "users manage their scenarios" on public.financial_scenarios
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "users manage their anomalies" on public.spending_anomalies;
+create policy "users manage their anomalies" on public.spending_anomalies
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "users manage their advisor chats" on public.ai_conversations;
+create policy "users manage their advisor chats" on public.ai_conversations
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "users manage their advisor messages" on public.ai_messages;
+create policy "users manage their advisor messages" on public.ai_messages
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "users manage their agent runs" on public.agent_runs;
+create policy "users manage their agent runs" on public.agent_runs
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "users manage their tool calls" on public.agent_tool_calls;
+create policy "users manage their tool calls" on public.agent_tool_calls
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "users manage their feedback" on public.financial_feedback;
+create policy "users manage their feedback" on public.financial_feedback
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "users manage their finance jobs" on public.finance_jobs;
+create policy "users manage their finance jobs" on public.finance_jobs
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
 notify pgrst, 'reload schema';

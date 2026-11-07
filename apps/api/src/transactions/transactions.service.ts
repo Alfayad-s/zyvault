@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { findCategory } from '../categories/categories.service.js';
+import { FinanceCache } from '../finance/finance.cache.js';
 import { SUPABASE } from '../supabase/supabase.constants.js';
 import { monthRange } from '../summary/month.js';
 import { TransactionDto } from './dto/transaction.dto.js';
@@ -65,7 +66,10 @@ function toTransaction(row: TransactionRow): Transaction {
 
 @Injectable()
 export class TransactionsService {
-  constructor(@Inject(SUPABASE) private readonly supabase: SupabaseClient) {}
+  constructor(
+    @Inject(SUPABASE) private readonly supabase: SupabaseClient,
+    private readonly cache: FinanceCache,
+  ) {}
 
   async list(
     userId: string,
@@ -167,6 +171,7 @@ export class TransactionsService {
       const { error } = await this.supabase.from('transactions').insert(slice.map((item) => this.row(userId, item)));
       if (error) throw new BadRequestException(error.message);
     }
+    await this.cache.invalidate(userId);
     return inputs.length;
   }
 
@@ -180,6 +185,7 @@ export class TransactionsService {
     if (error || !data) {
       throw new BadRequestException(error?.message ?? 'Could not save the transaction');
     }
+    await this.cache.invalidate(userId);
     return toTransaction(data as TransactionRow);
   }
 
@@ -202,6 +208,7 @@ export class TransactionsService {
     if (!data) {
       throw new NotFoundException('Transaction not found');
     }
+    await this.cache.invalidate(userId);
     return toTransaction(data as TransactionRow);
   }
 
@@ -218,6 +225,7 @@ export class TransactionsService {
     if (!data || data.length === 0) {
       throw new NotFoundException('Transaction not found');
     }
+    await this.cache.invalidate(userId);
   }
 
   private row(userId: string, input: TransactionDto) {
