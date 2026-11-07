@@ -6,6 +6,7 @@ import { DebtsModule } from '../debts/debts.module.js';
 import { GoalsModule } from '../goals/goals.module.js';
 import { SchedulesModule } from '../schedules/schedules.module.js';
 import { SummaryModule } from '../summary/summary.module.js';
+import { SupabaseModule } from '../supabase/supabase.module.js';
 import { FinanceCache } from './finance.cache.js';
 import { FinanceController } from './finance.controller.js';
 import { FinanceQueueClient } from './finance.queue.js';
@@ -20,6 +21,7 @@ export class FinanceInfraModule {}
 
 @Module({
   imports: [
+    SupabaseModule,
     AuthModule,
     SummaryModule,
     BudgetsModule,
