@@ -83,5 +83,6 @@ class CategoryIcon extends StatelessWidget {
 IconData _keyIcon(String key) => switch (key) {
   'lent' => LucideIcons.handCoins,
   'borrowed' => LucideIcons.handHeart,
+  'parents' => LucideIcons.users,
   _ => LucideIcons.sparkles,
 };

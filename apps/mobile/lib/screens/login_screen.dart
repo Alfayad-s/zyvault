@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:finance_track/api/finance_api.dart';
+import 'package:finance_track/haptics.dart';
 import 'package:finance_track/widgets/shimmer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -236,10 +237,13 @@ class _LoginScreenState extends State<LoginScreen> {
           child: GestureDetector(
             onTap: _busy
                 ? null
-                : () => setState(() {
-                    _signUp = !_signUp;
-                    _error = null;
-                  }),
+                : () {
+                    pressHaptic();
+                    setState(() {
+                      _signUp = !_signUp;
+                      _error = null;
+                    });
+                  },
             child: Text.rich(
               TextSpan(
                 text: _signUp
@@ -648,7 +652,10 @@ class _CodeBoxes extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => focusNode.requestFocus(),
+      onTap: () {
+        pressHaptic();
+        focusNode.requestFocus();
+      },
       child: Stack(
         children: [
           Opacity(

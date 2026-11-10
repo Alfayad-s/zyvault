@@ -11,6 +11,7 @@ export function Frame({ children }) {
             <a href="/#how">How it works</a>
             <a href="/about">About</a>
             <a href="/#faq">FAQ</a>
+            <a href="/#coffee">Coffee</a>
           </nav>
           <a className="nav-btn" href="/install">
             Get the app
@@ -26,6 +27,7 @@ export function Frame({ children }) {
             <a href="/#faq">FAQ</a>
             <a href="/install">Install</a>
             <a href="/privacy">Privacy</a>
+            <a href="/#coffee">Coffee</a>
             <a href="/terms">Terms</a>
             <a href="/llms.txt">Product facts</a>
           </nav>

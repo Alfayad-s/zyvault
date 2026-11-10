@@ -1,5 +1,6 @@
 import 'package:finance_track/api/finance_api.dart';
 import 'package:finance_track/app_lock.dart';
+import 'package:finance_track/haptics.dart';
 import 'package:finance_track/screens/lock_screen.dart';
 import 'package:finance_track/screens/login_screen.dart';
 import 'package:finance_track/screens/onboarding_screen.dart';
@@ -89,7 +90,8 @@ class _FinanceTrackAppState extends State<FinanceTrackApp>
           centerTitle: true,
         ),
       ),
-      builder: (context, child) => ListenableBuilder(
+      builder: (context, child) => TapHaptics(
+        child: ListenableBuilder(
         listenable: Listenable.merge([_session, _lock]),
         builder: (context, _) => Stack(
           children: [
@@ -97,6 +99,7 @@ class _FinanceTrackAppState extends State<FinanceTrackApp>
             if (_session.signedIn && _lock.locked)
               LockScreen(lock: _lock, onSignOut: _signOut),
           ],
+        ),
         ),
       ),
       home: ListenableBuilder(

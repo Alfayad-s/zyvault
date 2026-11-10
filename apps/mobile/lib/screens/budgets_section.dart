@@ -1,4 +1,5 @@
 import 'package:finance_track/api/finance_api.dart';
+import 'package:finance_track/haptics.dart';
 import 'package:finance_track/ledger.dart';
 import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
@@ -528,7 +529,10 @@ class _BudgetEditorState extends State<BudgetEditor> {
                       selected: selected,
                       label: category.name,
                       child: GestureDetector(
-                        onTap: () => setState(() => _categoryId = category.id),
+                        onTap: () {
+                          pressHaptic();
+                          setState(() => _categoryId = category.id);
+                        },
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 140),
                           width: 82,

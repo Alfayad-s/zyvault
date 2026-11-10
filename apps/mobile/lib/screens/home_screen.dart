@@ -1,3 +1,4 @@
+import 'package:finance_track/haptics.dart';
 import 'package:finance_track/ledger.dart';
 import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
@@ -165,7 +166,10 @@ class HomeView extends StatelessWidget {
               monthChange: summary.monthIncome - summary.monthExpense,
               onReceive: onReceive,
               onSend: onSend,
-              accounts: accounts,
+              accounts: [
+                for (final account in accounts)
+                  if (account.type != 'credit') account,
+              ],
               monthTransactions: monthTransactions,
               accountChanges: {
                 for (final change in summary.accountChanges) change.accountId: change.change,
@@ -765,7 +769,7 @@ class _BalanceCardState extends State<BalanceCard> {
                       button: true,
                       label: _hidden ? 'Show balance' : 'Hide balance',
                       child: GestureDetector(
-                        onTap: _toggleEye,
+                        onTap: withTapHaptic(_toggleEye),
                         child: Container(
                           width: 36,
                           height: 36,
@@ -900,7 +904,7 @@ class _LogoChip extends StatelessWidget {
           ? '${account.name} selected, tap to show all accounts'
           : 'Show ${account.name} balance',
       child: GestureDetector(
-        onTap: onTap,
+        onTap: withTapHaptic(onTap),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           width: _AccountLogos._size,

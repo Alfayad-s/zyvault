@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
+import { AccountsModule } from '../accounts/accounts.module.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { SupabaseModule } from '../supabase/supabase.module.js';
 import { TransactionsController } from './transactions.controller.js';
 import { TransactionsService } from './transactions.service.js';
 
 @Module({
-  imports: [SupabaseModule, AuthModule],
+  imports: [SupabaseModule, AuthModule, AccountsModule],
   controllers: [TransactionsController],
   providers: [TransactionsService],
   exports: [TransactionsService],

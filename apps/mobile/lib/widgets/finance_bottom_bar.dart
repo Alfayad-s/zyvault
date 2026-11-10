@@ -1,3 +1,4 @@
+import 'package:finance_track/haptics.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -85,7 +86,7 @@ class _AddButton extends StatelessWidget {
       button: true,
       label: 'Add',
       child: GestureDetector(
-        onTap: onTap,
+        onTap: withTapHaptic(onTap),
         child: Container(
           width: 60,
           height: 60,
@@ -128,7 +129,7 @@ class _NavItem extends StatelessWidget {
       selected: selected,
       label: label,
       child: GestureDetector(
-        onTap: onTap,
+        onTap: withTapHaptic(onTap),
         behavior: HitTestBehavior.opaque,
         child: SizedBox(
           width: 52,

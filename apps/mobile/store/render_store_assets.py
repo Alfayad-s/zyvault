@@ -150,17 +150,9 @@ def screenshot(filename, headline, sub, selected, body):
 
 
 def icon():
-    image, draw = new(512, 512, WHITE)
-    size = 72
-    face = font(EB, size)
-    width = text_width(draw, "zyvault", face) / S
-    dot = max(8, int(size * 0.22))
-    gap = max(3, int(size * 0.06))
-    total = width + gap + dot
-    x = (512 - total) / 2
-    y = (512 - size) / 2 - 6
-    wordmark(draw, x, y, size)
-    save(image, "icon-512.png", 512, 512)
+    source = ROOT.parent / "assets" / "brand" / "og-app-icon.png"
+    image = Image.open(source).convert("RGB").resize((512, 512), Image.Resampling.LANCZOS)
+    image.save(OUT / "icon-512.png", "PNG")
 
 
 def feature():

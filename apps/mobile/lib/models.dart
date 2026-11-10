@@ -6,14 +6,45 @@ class Account {
     required this.openingBalance,
     this.bankId,
     int? balance,
-  }) : balance = balance ?? openingBalance;
+    this.cardKind,
+    this.limitAmount,
+    this.billDay,
+    this.dueDay,
+    this.used,
+    this.available,
+  }) : balance = balance ?? available ?? openingBalance;
 
   final String id;
   final String name;
   final String type;
   final int openingBalance;
   final String? bankId;
+  final String? cardKind;
+  final int? limitAmount;
+  final int? billDay;
+  final int? dueDay;
+  final int? used;
+  final int? available;
   final int balance;
+
+  bool get isCard => type == 'credit';
+
+  Account copyWith({int? balance, int? used, int? available}) {
+    return Account(
+      id: id,
+      name: name,
+      type: type,
+      openingBalance: openingBalance,
+      bankId: bankId,
+      balance: balance ?? this.balance,
+      cardKind: cardKind,
+      limitAmount: limitAmount,
+      billDay: billDay,
+      dueDay: dueDay,
+      used: used ?? this.used,
+      available: available ?? this.available,
+    );
+  }
 
   factory Account.fromJson(Map<String, dynamic> json) {
     return Account(
@@ -23,6 +54,12 @@ class Account {
       openingBalance: (json['openingBalance'] as num).toInt(),
       bankId: json['bankId'] as String?,
       balance: (json['balance'] as num?)?.toInt(),
+      cardKind: json['cardKind'] as String?,
+      limitAmount: (json['limitAmount'] as num?)?.toInt(),
+      billDay: (json['billDay'] as num?)?.toInt(),
+      dueDay: (json['dueDay'] as num?)?.toInt(),
+      used: (json['used'] as num?)?.toInt(),
+      available: (json['available'] as num?)?.toInt(),
     );
   }
 
@@ -33,6 +70,12 @@ class Account {
     'openingBalance': openingBalance,
     'bankId': bankId,
     'balance': balance,
+    'cardKind': cardKind,
+    'limitAmount': limitAmount,
+    'billDay': billDay,
+    'dueDay': dueDay,
+    'used': used,
+    'available': available,
   };
 }
 
@@ -191,6 +234,8 @@ class TransactionItem {
     required this.kind,
     required this.occurredOn,
     required this.note,
+    this.cardEffect,
+    this.cardId,
   });
 
   final String id;
@@ -202,6 +247,8 @@ class TransactionItem {
   final String kind;
   final String occurredOn;
   final String? note;
+  final String? cardEffect;
+  final String? cardId;
 
   factory TransactionItem.fromJson(Map<String, dynamic> json) {
     return TransactionItem(
@@ -214,6 +261,8 @@ class TransactionItem {
       kind: json['kind'] as String,
       occurredOn: json['occurredOn'] as String,
       note: json['note'] as String?,
+      cardEffect: json['cardEffect'] as String?,
+      cardId: json['cardId'] as String?,
     );
   }
 
@@ -228,6 +277,8 @@ class TransactionItem {
       'kind': kind,
       'occurredOn': occurredOn,
       'note': note,
+      'cardEffect': cardEffect,
+      'cardId': cardId,
     };
   }
 }

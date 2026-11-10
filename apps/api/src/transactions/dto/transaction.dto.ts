@@ -32,4 +32,12 @@ export class TransactionDto {
   @IsString()
   @MinLength(0)
   note?: string;
+
+  @IsOptional()
+  @IsIn(['spend', 'payment'])
+  cardEffect?: 'spend' | 'payment';
+
+  @IsOptional()
+  @IsUUID()
+  cardId?: string;
 }

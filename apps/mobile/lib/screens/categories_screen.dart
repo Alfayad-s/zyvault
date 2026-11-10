@@ -1,4 +1,5 @@
 import 'package:finance_track/api/finance_api.dart';
+import 'package:finance_track/haptics.dart';
 import 'package:finance_track/ledger.dart';
 import 'package:finance_track/models.dart';
 import 'package:finance_track/widgets/category_icon.dart';
@@ -190,7 +191,10 @@ class _KindSwitch extends StatelessWidget {
           ])
             Expanded(
               child: GestureDetector(
-                onTap: () => onChanged(item.$1),
+                onTap: () {
+                  pressHaptic();
+                  onChanged(item.$1);
+                },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 160),
                   padding: const EdgeInsets.symmetric(vertical: 10),
@@ -473,7 +477,10 @@ class _CategorySheetState extends State<_CategorySheet> {
                       selected: icon == _icon,
                       label: icon,
                       child: GestureDetector(
-                        onTap: () => setState(() => _icon = icon),
+                        onTap: () {
+                          pressHaptic();
+                          setState(() => _icon = icon);
+                        },
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 140),
                           padding: const EdgeInsets.all(3),

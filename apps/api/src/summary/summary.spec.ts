@@ -36,4 +36,36 @@ describe('buildSummary', () => {
       'Food',
     ]);
   });
+
+  it('keeps a card swipe out of cash and a bill payment out of categories', () => {
+    const summary = buildSummary(
+      100000,
+      [
+        { amount: 20000, kind: 'expense', cardEffect: 'spend' },
+        { amount: 20000, kind: 'expense', cardEffect: 'payment' },
+      ],
+      [
+        {
+          amount: 20000,
+          kind: 'expense',
+          cardEffect: 'spend',
+          categoryId: 'food',
+          categoryName: 'Food',
+          accountId: 'card',
+        },
+        {
+          amount: 20000,
+          kind: 'expense',
+          cardEffect: 'payment',
+          categoryId: 'other',
+          categoryName: 'Other',
+          accountId: 'bank',
+        },
+      ],
+    );
+    expect(summary.balance).toBe(80000);
+    expect(summary.monthExpense).toBe(20000);
+    expect(summary.categories.map((category) => category.name)).toEqual(['Food']);
+    expect(summary.accountChanges).toEqual([{ accountId: 'bank', change: -20000 }]);
+  });
 });

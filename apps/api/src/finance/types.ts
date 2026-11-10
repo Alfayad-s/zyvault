@@ -10,6 +10,7 @@ export type LedgerTxn = {
   categoryName: string;
   accountId: string;
   note: string | null;
+  cardEffect?: 'spend' | 'payment' | null;
 };
 
 export type ScheduleItem = {

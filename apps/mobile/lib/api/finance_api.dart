@@ -207,6 +207,10 @@ class FinanceApi {
     required String type,
     required int openingBalance,
     String? bankId,
+    String? cardKind,
+    int? limitAmount,
+    int? billDay,
+    int? dueDay,
   }) async {
     final body = await _send(
       'POST',
@@ -216,6 +220,10 @@ class FinanceApi {
         'type': type,
         'openingBalance': openingBalance,
         'bankId': ?bankId,
+        'cardKind': ?cardKind,
+        'limitAmount': ?limitAmount,
+        'billDay': ?billDay,
+        'dueDay': ?dueDay,
       },
     );
     return Account.fromJson(body as Map<String, dynamic>);
@@ -227,6 +235,10 @@ class FinanceApi {
     required String type,
     required int openingBalance,
     String? bankId,
+    String? cardKind,
+    int? limitAmount,
+    int? billDay,
+    int? dueDay,
   }) async {
     final body = await _send(
       'PATCH',
@@ -236,6 +248,10 @@ class FinanceApi {
         'type': type,
         'openingBalance': openingBalance,
         'bankId': ?bankId,
+        'cardKind': ?cardKind,
+        'limitAmount': ?limitAmount,
+        'billDay': ?billDay,
+        'dueDay': ?dueDay,
       },
     );
     return Account.fromJson(body as Map<String, dynamic>);
@@ -548,6 +564,8 @@ class FinanceApi {
     required String kind,
     required String occurredOn,
     String? note,
+    String? cardEffect,
+    String? cardId,
   }) async {
     final body = await _send(
       id == null ? 'POST' : 'PATCH',
@@ -559,6 +577,8 @@ class FinanceApi {
         'kind': kind,
         'occurredOn': occurredOn,
         'note': note,
+        'cardEffect': ?cardEffect,
+        'cardId': ?cardId,
       },
     );
     return TransactionItem.fromJson(body as Map<String, dynamic>);

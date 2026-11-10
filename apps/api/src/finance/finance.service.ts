@@ -50,6 +50,7 @@ type TxnRow = {
   category_id: string;
   account_id: string;
   note: string | null;
+  card_effect?: 'spend' | 'payment' | null;
   category: { name: string } | { name: string }[] | null;
 };
 
@@ -457,14 +458,22 @@ export class FinanceService {
   }
 
   private async transactions(userId: string): Promise<LedgerTxn[]> {
-    const rows = await allRows<TxnRow>((from, to) =>
-      this.supabase
-        .from('transactions')
-        .select('id, amount, kind, occurred_on, category_id, account_id, note, category:categories(name)')
-        .eq('user_id', userId)
-        .order('id')
-        .range(from, to),
-    );
+    const load = (select: string) =>
+      allRows<TxnRow>((from, to) =>
+        this.supabase.from('transactions').select(select).eq('user_id', userId).order('id').range(from, to) as unknown as PromiseLike<{
+          data: TxnRow[] | null;
+          error: { message: string } | null;
+        }>,
+      );
+    let rows: TxnRow[];
+    try {
+      rows = await load(
+        'id, amount, kind, occurred_on, category_id, account_id, note, card_effect, category:categories(name)',
+      );
+    } catch (caught) {
+      if (!(caught instanceof BadRequestException) || !caught.message.includes('card_effect')) throw caught;
+      rows = await load('id, amount, kind, occurred_on, category_id, account_id, note, category:categories(name)');
+    }
     return rows.map((row) => ({
       id: row.id,
       amount: row.amount,
@@ -474,6 +483,7 @@ export class FinanceService {
       categoryName: categoryName(row.category),
       accountId: row.account_id,
       note: row.note,
+      cardEffect: row.card_effect === 'spend' || row.card_effect === 'payment' ? row.card_effect : null,
     }));
   }
 

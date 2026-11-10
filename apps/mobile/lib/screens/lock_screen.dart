@@ -1,4 +1,5 @@
 import 'package:finance_track/app_lock.dart';
+import 'package:finance_track/haptics.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -48,7 +49,7 @@ class _LockScreenState extends State<LockScreen> {
             children: [
               const Spacer(flex: 3),
               GestureDetector(
-                onTap: _unlock,
+                onTap: withTapHaptic(_unlock),
                 child: Container(
                   width: 96,
                   height: 96,

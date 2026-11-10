@@ -90,6 +90,7 @@ const broaderCategories: Record<string, string> = {
   'Personal care': 'Shopping',
   Home: 'Shopping',
   Gifts: 'Shopping',
+  Parents: 'Gifts',
   Business: 'Other income',
   Freelance: 'Other income',
   Interest: 'Other income',

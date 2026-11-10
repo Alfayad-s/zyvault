@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:finance_track/api/finance_api.dart';
+import 'package:finance_track/haptics.dart';
 import 'package:finance_track/celebration.dart';
 import 'package:finance_track/ledger.dart';
 import 'package:finance_track/models.dart';
@@ -946,7 +947,10 @@ class _GoalEditorState extends State<GoalEditor> {
                     selected: icon == _icon,
                     label: icon,
                     child: GestureDetector(
-                      onTap: () => setState(() => _icon = icon),
+                      onTap: () {
+                        pressHaptic();
+                        setState(() => _icon = icon);
+                      },
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 140),
                         padding: const EdgeInsets.all(3),

@@ -34,6 +34,7 @@ const expenseWords: Record<string, string[]> = {
   Education: ['school', 'tuition', 'college'],
   Entertainment: ['bookmyshow', 'cinema', 'movie'],
   Gifts: ['gift', 'donation'],
+  Parents: ['mother', 'father', 'mom', 'dad', 'amma', 'achan'],
   EMI: ['emi', 'credit card'],
   Investments: ['zerodha', 'groww', 'mutual fund', 'sip'],
 };
@@ -59,6 +60,7 @@ const broader: Record<string, string> = {
   'Personal care': 'Shopping',
   Home: 'Shopping',
   Gifts: 'Shopping',
+  Parents: 'Gifts',
   Interest: 'Other income',
   Refund: 'Other income',
   Freelance: 'Other income',

@@ -1,4 +1,5 @@
 import 'package:finance_track/api/finance_api.dart';
+import 'package:finance_track/haptics.dart';
 import 'package:finance_track/ledger.dart';
 import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
@@ -710,7 +711,7 @@ class _Choice extends StatelessWidget {
       button: true,
       selected: selected,
       child: GestureDetector(
-        onTap: onTap,
+        onTap: withTapHaptic(onTap),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           padding: const EdgeInsets.fromLTRB(6, 6, 14, 6),

@@ -1,3 +1,4 @@
+import 'package:finance_track/haptics.dart';
 import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
 import 'package:finance_track/widgets/category_icon.dart';
@@ -43,7 +44,7 @@ class OperationsCard extends StatelessWidget {
               const Spacer(),
               if (onOpenRecords != null)
                 GestureDetector(
-                  onTap: onOpenRecords,
+                  onTap: withTapHaptic(onOpenRecords),
                   child: const Text(
                     'Full records',
                     style: TextStyle(color: Color(0xFF8E8E93), fontSize: 15),
@@ -183,6 +184,7 @@ IconData categoryIcon(String name, String kind) {
     'pet': LucideIcons.pawPrint,
     'entertainment': LucideIcons.clapperboard,
     'gift': LucideIcons.gift,
+    'parent': LucideIcons.users,
     'emi': LucideIcons.landmark,
     'invest': LucideIcons.trendingUp,
     'salary': LucideIcons.briefcase,

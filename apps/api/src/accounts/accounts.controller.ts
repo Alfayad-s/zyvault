@@ -26,6 +26,11 @@ export class AccountsController {
     return this.accounts.list(user.id);
   }
 
+  @Get(':id/card')
+  card(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.accounts.card(user.id, id);
+  }
+
   @Post()
   create(@CurrentUser() user: AuthUser, @Body() body: CreateAccountDto) {
     return this.accounts.create(user.id, body);

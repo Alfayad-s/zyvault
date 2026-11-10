@@ -16,58 +16,71 @@ export const site = {
   contactEmail: 'hello@clawdage.com',
 };
 
+export const featureTabs = ['Record', 'Plan', 'Ask', 'Phone'];
+
 export const features = [
   {
+    tab: 'Record',
     title: 'Just say it',
     body: 'Type or speak “450 pizza last night” or “35k salary on 6th”. zyvault shows the line before it is saved. Voice works in English, Malayalam and Hinglish, and a photo of a bill can be read the same way.',
     icon: 'mic',
   },
   {
+    tab: 'Record',
     title: 'Payments caught',
     body: 'Bank SMS and alerts from GPay, PhonePe, Paytm, BHIM and CRED become one question: where did this money go? The message stays on the phone. A sender you mark as spam is skipped until you allow it.',
     icon: 'bell',
   },
   {
-    title: 'Budgets & goals',
-    body: 'Set a monthly limit for food, shopping or any category. zyvault warns you at 80% and again when you go over. Save toward a goal, such as a trip, by saying “add 500 to Goa trip”.',
-    icon: 'target',
-  },
-  {
-    title: 'Plans & reminders',
-    body: 'Salary on the 1st, rent on the 5th, send ₹500 to someone at 6 pm. zyvault reminds you, then records the entry. Reminders can arrive when the app is closed.',
-    icon: 'cal',
-  },
-  {
-    title: 'Ask your money',
-    body: 'Ask “How much on food this month?” or “Who owes me?” The answer comes back with a chart, from the accounts and categories you already keep.',
-    icon: 'chat',
-  },
-  {
-    title: 'A forecast you can check',
-    body: 'The phone can show the next 7 to 90 days, what is safe to spend after rent and savings, and a health score built from your own figures. A purchase stays a what-if until you save it yourself. Estimated income is never treated as money you already have.',
-    icon: 'chart',
-  },
-  {
-    title: 'Chat that answers',
-    body: 'The assistant answers how the app works, what a budget means, and questions about your month. You can also tell it to log a spend, set a budget, add to a goal or note money lent. It shows the line first. A question that does not save anything still gets an answer.',
-    icon: 'spark',
-  },
-  {
-    title: 'Home screen widget',
-    body: 'A widget on the phone shows the balance and what you spent this month. The eye hides both lines. Tap the balance to open zyvault.',
-    icon: 'widget',
-  },
-  {
-    title: 'Works offline',
-    body: 'Add or change an account, category, spend, budget, goal, debt or plan without a connection. It stays on the phone and is sent to your account when the internet is back.',
-    icon: 'phone',
-  },
-  {
+    tab: 'Record',
     title: 'Bank statements',
     body: 'Open a bank statement PDF and check the lines before they are saved. A photo of a bill works the same way: you see the amount and merchant, then confirm.',
     icon: 'file',
   },
   {
+    tab: 'Plan',
+    title: 'Budgets & goals',
+    body: 'Set a monthly limit for food, shopping or any category. zyvault warns you at 80% and again when you go over. Save toward a goal, such as a trip, by saying “add 500 to Goa trip”.',
+    icon: 'target',
+  },
+  {
+    tab: 'Plan',
+    title: 'Plans & reminders',
+    body: 'Salary on the 1st, rent on the 5th, send ₹500 to someone at 6 pm. zyvault reminds you, then records the entry. Reminders can arrive when the app is closed.',
+    icon: 'cal',
+  },
+  {
+    tab: 'Ask',
+    title: 'Ask your money',
+    body: 'Ask “How much on food this month?” or “Who owes me?” The answer comes back with a chart, from the accounts and categories you already keep.',
+    icon: 'chat',
+  },
+  {
+    tab: 'Ask',
+    title: 'A forecast you can check',
+    body: 'The phone can show the next 7 to 90 days, what is safe to spend after rent and savings, and a health score built from your own figures. A purchase stays a what-if until you save it yourself. Estimated income is never treated as money you already have.',
+    icon: 'chart',
+  },
+  {
+    tab: 'Ask',
+    title: 'Chat that answers',
+    body: 'The assistant answers how the app works, what a budget means, and questions about your month. You can also tell it to log a spend, set a budget, add to a goal or note money lent. It shows the line first. A question that does not save anything still gets an answer.',
+    icon: 'spark',
+  },
+  {
+    tab: 'Phone',
+    title: 'Home screen widget',
+    body: 'A widget on the phone shows the balance and what you spent this month. The eye hides both lines. Tap the balance to open zyvault.',
+    icon: 'widget',
+  },
+  {
+    tab: 'Phone',
+    title: 'Works offline',
+    body: 'Add or change an account, category, spend, budget, goal, debt or plan without a connection. It stays on the phone and is sent to your account when the internet is back.',
+    icon: 'phone',
+  },
+  {
+    tab: 'Phone',
     title: 'Private on the phone',
     body: 'Bank SMS and UPI alerts are read on the device. You confirm a spend before it is saved, and a fingerprint, face or phone PIN can lock the app when it opens.',
     icon: 'lock',

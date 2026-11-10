@@ -215,7 +215,7 @@ export function buildOverview(input: {
   const month = input.today.slice(0, 7);
   const spent = new Map<string, number>();
   for (const txn of input.transactions) {
-    if (txn.kind === 'expense' && txn.occurredOn.startsWith(month)) {
+    if (txn.kind === 'expense' && txn.cardEffect !== 'payment' && txn.occurredOn.startsWith(month)) {
       spent.set(txn.categoryId, (spent.get(txn.categoryId) ?? 0) + txn.amount);
     }
   }
@@ -252,6 +252,7 @@ function samples(transactions: LedgerTxn[], today: string, kind: MoneyKind): Map
   const start = addDays(today, -56);
   const grouped = new Map<string, Map<string, number>>();
   for (const txn of transactions) {
+    if (txn.cardEffect === 'spend') continue;
     if (txn.kind !== kind || txn.occurredOn < start || txn.occurredOn >= today) continue;
     const key = `${txn.categoryName.toLowerCase()}|${weekday(txn.occurredOn)}`;
     const days = grouped.get(key) ?? new Map<string, number>();
@@ -428,8 +429,9 @@ export function detectAnomalies(transactions: LedgerTxn[], today: string): Anoma
   const recentStart = addDays(today, -30);
   const ordered = [...transactions].sort((a, b) => a.occurredOn.localeCompare(b.occurredOn) || a.id.localeCompare(b.id));
   for (const txn of ordered) {
+    if (txn.cardEffect === 'payment') continue;
     if (txn.kind !== 'expense' || txn.occurredOn < recentStart || txn.occurredOn > today) continue;
-    const history = ordered.filter((item) => item.id !== txn.id && item.categoryId === txn.categoryId && item.kind === 'expense' && item.occurredOn < txn.occurredOn);
+    const history = ordered.filter((item) => item.id !== txn.id && item.cardEffect !== 'payment' && item.categoryId === txn.categoryId && item.kind === 'expense' && item.occurredOn < txn.occurredOn);
     if (history.length >= 8) {
       const amounts = history.map((item) => item.amount);
       const mid = median(amounts);
@@ -633,7 +635,7 @@ export function monthBuckets(transactions: LedgerTxn[], today: string, count: nu
     let income = 0;
     let expense = 0;
     for (const txn of transactions) {
-      if (!txn.occurredOn.startsWith(month)) continue;
+      if (!txn.occurredOn.startsWith(month) || txn.cardEffect === 'payment') continue;
       if (txn.kind === 'income') income += txn.amount;
       else expense += txn.amount;
     }

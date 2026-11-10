@@ -1,6 +1,7 @@
 export type SignedAmount = {
   amount: number;
   kind: 'income' | 'expense';
+  cardEffect?: 'spend' | 'payment' | null;
 };
 
 export type SummaryTransaction = SignedAmount & {
@@ -40,16 +41,19 @@ export function buildSummary(
   all: SignedAmount[],
   month: SummaryTransaction[],
 ): Summary {
-  const balance = all.reduce((sum, transaction) => sum + signed(transaction), openingBalance);
-  const monthIncome = month
+  const cash = all.filter((transaction) => transaction.cardEffect !== 'spend');
+  const counted = month.filter((transaction) => transaction.cardEffect !== 'payment');
+  const cashMonth = month.filter((transaction) => transaction.cardEffect !== 'spend');
+  const balance = cash.reduce((sum, transaction) => sum + signed(transaction), openingBalance);
+  const monthIncome = counted
     .filter((transaction) => transaction.kind === 'income')
     .reduce((sum, transaction) => sum + transaction.amount, 0);
-  const monthExpense = month
+  const monthExpense = counted
     .filter((transaction) => transaction.kind === 'expense')
     .reduce((sum, transaction) => sum + transaction.amount, 0);
 
   const totals = new Map<string, CategoryTotal>();
-  for (const transaction of month) {
+  for (const transaction of counted) {
     const key = `${transaction.categoryId}:${transaction.kind}`;
     const current = totals.get(key);
     if (current) {
@@ -65,7 +69,7 @@ export function buildSummary(
   }
 
   const accounts = new Map<string, number>();
-  for (const transaction of month) {
+  for (const transaction of cashMonth) {
     if (!transaction.accountId) continue;
     const signedAmount = signed(transaction);
     accounts.set(transaction.accountId, (accounts.get(transaction.accountId) ?? 0) + signedAmount);

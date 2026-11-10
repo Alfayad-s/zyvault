@@ -192,7 +192,12 @@ function categoryLines(summary: Summary): string[] {
 }
 
 function accountLines(accounts: Account[]): string[] {
-  return accounts.slice(0, 6).map((account) => `${account.name} ${rupees(account.balance ?? account.openingBalance)}`);
+  return accounts.slice(0, 8).map((account) => {
+    if (account.type === 'credit') {
+      return `${account.name} card, ${rupees(account.available ?? 0)} free of ${rupees(account.limitAmount ?? 0)}`;
+    }
+    return `${account.name} ${rupees(account.balance ?? account.openingBalance)}`;
+  });
 }
 
 function recentLines(transactions: Transaction[]): string[] {

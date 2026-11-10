@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:finance_track/api/finance_api.dart';
+import 'package:finance_track/haptics.dart';
 import 'package:finance_track/build_flags.dart';
 import 'package:finance_track/app_lock.dart';
 import 'package:finance_track/ledger.dart';
@@ -346,7 +347,7 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
         return Column(
       children: [
         GestureDetector(
-          onTap: _choose,
+          onTap: withTapHaptic(_choose),
           child: Stack(
             clipBehavior: Clip.none,
             children: [

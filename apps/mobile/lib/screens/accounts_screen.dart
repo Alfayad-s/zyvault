@@ -1,7 +1,9 @@
 import 'package:finance_track/api/finance_api.dart';
+import 'package:finance_track/haptics.dart';
 import 'package:finance_track/ledger.dart';
 import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
+import 'package:finance_track/screens/credit_card_screen.dart';
 import 'package:finance_track/screens/people_section.dart';
 import 'package:finance_track/widgets/bank_logo.dart';
 import 'package:finance_track/widgets/pull_refresh.dart';
@@ -51,13 +53,49 @@ class AccountsScreen extends StatelessWidget {
                       _AccountRow(
                         account: account,
                         bank: ledger.bankFor(account),
-                        onTap: () => _editAccount(context, account),
+                        onTap: () => account.isCard
+                            ? _openCard(context, account)
+                            : _editAccount(context, account),
                       ),
                     ],
                   ],
                 ),
               ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 56,
+              child: OutlinedButton.icon(
+                onPressed: () => _addCard(context, 'fd'),
+                icon: const Icon(LucideIcons.landmark),
+                label: const Text('FD-backed card'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: _line),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 56,
+              child: OutlinedButton.icon(
+                onPressed: () => _addCard(context, 'bank'),
+                icon: const Icon(LucideIcons.creditCard),
+                label: const Text('Bank card'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: _line),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
             SizedBox(
               height: 56,
               child: FilledButton.icon(
@@ -121,6 +159,35 @@ class AccountsScreen extends StatelessWidget {
     } on FinanceException catch (error) {
       if (context.mounted) _showError(context, error.message);
     }
+  }
+
+  Future<void> _addCard(BuildContext context, String kind) async {
+    final banks = await ledger.loadBanks();
+    if (!context.mounted) return;
+    final result = await showCardEditor(context, banks: banks, kind: kind);
+    if (result == null || !context.mounted) return;
+    try {
+      await ledger.createAccount(
+        name: result.name,
+        type: 'credit',
+        openingBalance: 0,
+        bankId: result.bankId,
+        cardKind: result.kind,
+        limitAmount: result.limitAmount,
+        billDay: result.billDay,
+        dueDay: result.dueDay,
+      );
+    } on FinanceException catch (error) {
+      if (context.mounted) _showError(context, error.message);
+    }
+  }
+
+  void _openCard(BuildContext context, Account account) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CreditCardScreen(ledger: ledger, accountId: account.id),
+      ),
+    );
   }
 
   Future<void> _editAccount(BuildContext context, Account account) async {
@@ -187,7 +254,10 @@ class _AccountRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cash = account.type == 'cash';
-    final subtitle = cash
+    final card = account.isCard;
+    final subtitle = card
+        ? '${account.cardKind == 'fd' ? 'FD-backed' : 'Bank card'} · ${formatRupees(account.used ?? 0)} used'
+        : cash
         ? 'Cash'
         : bank != null && bank!.name != account.name
         ? bank!.name
@@ -211,7 +281,9 @@ class _AccountRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Text(
-            account.balance < 0
+            card
+                ? formatRupees(account.available ?? account.balance)
+                : account.balance < 0
                 ? '- ${formatRupees(-account.balance)}'
                 : formatRupees(account.balance),
             style: const TextStyle(
@@ -219,7 +291,10 @@ class _AccountRow extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const Text('balance', style: TextStyle(color: _muted, fontSize: 12)),
+          Text(
+            card ? 'free of ${formatRupees(account.limitAmount ?? 0)}' : 'balance',
+            style: const TextStyle(color: _muted, fontSize: 12),
+          ),
         ],
       ),
     );
@@ -545,7 +620,10 @@ class _TypeSwitch extends StatelessWidget {
     Widget option(String value, String label) {
       final selected = type == value;
       return GestureDetector(
-        onTap: () => onChanged(value),
+        onTap: () {
+          pressHaptic();
+          onChanged(value);
+        },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

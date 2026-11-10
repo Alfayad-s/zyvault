@@ -413,14 +413,23 @@ class Ledger extends ChangeNotifier {
     required String type,
     required int openingBalance,
     String? bankId,
+    String? cardKind,
+    int? limitAmount,
+    int? billDay,
+    int? dueDay,
   }) async {
     final localId = _localId();
+    final card = type == 'credit';
     await _commit(
       send: () => api.createAccount(
         name: name,
         type: type,
         openingBalance: openingBalance,
         bankId: bankId,
+        cardKind: cardKind,
+        limitAmount: limitAmount,
+        billDay: billDay,
+        dueDay: dueDay,
       ),
       method: 'POST',
       path: '/accounts',
@@ -430,6 +439,10 @@ class Ledger extends ChangeNotifier {
         'type': type,
         'openingBalance': openingBalance,
         'bankId': bankId,
+        'cardKind': cardKind,
+        'limitAmount': limitAmount,
+        'billDay': billDay,
+        'dueDay': dueDay,
       },
       apply: () {
         accounts = [
@@ -440,11 +453,17 @@ class Ledger extends ChangeNotifier {
             type: type,
             openingBalance: openingBalance,
             bankId: bankId,
-            balance: openingBalance,
+            balance: card ? limitAmount : openingBalance,
+            cardKind: cardKind,
+            limitAmount: limitAmount,
+            billDay: billDay,
+            dueDay: dueDay,
+            used: card ? 0 : null,
+            available: card ? limitAmount : null,
           ),
         ];
         summary = Summary(
-          balance: (summary?.balance ?? 0) + openingBalance,
+          balance: (summary?.balance ?? 0) + (card ? 0 : openingBalance),
           monthIncome: summary?.monthIncome ?? 0,
           monthExpense: summary?.monthExpense ?? 0,
           categories: summary?.categories ?? const [],
@@ -460,6 +479,10 @@ class Ledger extends ChangeNotifier {
     required String type,
     required int openingBalance,
     String? bankId,
+    String? cardKind,
+    int? limitAmount,
+    int? billDay,
+    int? dueDay,
   }) async {
     await _commit(
       send: () => api.updateAccount(
@@ -468,6 +491,10 @@ class Ledger extends ChangeNotifier {
         type: type,
         openingBalance: openingBalance,
         bankId: bankId,
+        cardKind: cardKind,
+        limitAmount: limitAmount,
+        billDay: billDay,
+        dueDay: dueDay,
       ),
       method: 'PATCH',
       path: '/accounts/$id',
@@ -476,6 +503,10 @@ class Ledger extends ChangeNotifier {
         'type': type,
         'openingBalance': openingBalance,
         'bankId': bankId,
+        'cardKind': cardKind,
+        'limitAmount': limitAmount,
+        'billDay': billDay,
+        'dueDay': dueDay,
       },
       apply: () {
         accounts = [
@@ -487,8 +518,19 @@ class Ledger extends ChangeNotifier {
                 type: type,
                 openingBalance: openingBalance,
                 bankId: bankId,
-                balance:
-                    account.balance - account.openingBalance + openingBalance,
+                cardKind: cardKind ?? account.cardKind,
+                limitAmount: limitAmount ?? account.limitAmount,
+                billDay: billDay ?? account.billDay,
+                dueDay: dueDay ?? account.dueDay,
+                used: account.used,
+                available: type == 'credit'
+                    ? ((limitAmount ?? account.limitAmount ?? 0) - (account.used ?? 0))
+                        .clamp(0, limitAmount ?? account.limitAmount ?? 0)
+                    : account.available,
+                balance: type == 'credit'
+                    ? ((limitAmount ?? account.limitAmount ?? 0) - (account.used ?? 0))
+                        .clamp(0, limitAmount ?? account.limitAmount ?? 0)
+                    : account.balance - account.openingBalance + openingBalance,
               )
             else
               account,
@@ -698,7 +740,7 @@ class Ledger extends ChangeNotifier {
   }
 
   Bank? bankFor(Account account) {
-    if (account.type != 'bank') return null;
+    if (account.type != 'bank' && account.type != 'credit') return null;
     for (final bank in banks) {
       if (bank.id == account.bankId) return bank;
     }
@@ -725,6 +767,8 @@ class Ledger extends ChangeNotifier {
     required String kind,
     required String occurredOn,
     String? note,
+    String? cardEffect,
+    String? cardId,
   }) async {
     final localId = id ?? _localId();
     await _commit(
@@ -736,6 +780,8 @@ class Ledger extends ChangeNotifier {
         kind: kind,
         occurredOn: occurredOn,
         note: note,
+        cardEffect: cardEffect,
+        cardId: cardId,
       ),
       method: id == null ? 'POST' : 'PATCH',
       path: id == null ? '/transactions' : '/transactions/$id',
@@ -747,6 +793,8 @@ class Ledger extends ChangeNotifier {
         'kind': kind,
         'occurredOn': occurredOn,
         'note': note,
+        'cardEffect': cardEffect,
+        'cardId': cardId,
       },
       apply: () {
         _putTransaction(
@@ -758,6 +806,8 @@ class Ledger extends ChangeNotifier {
             kind: kind,
             occurredOn: occurredOn,
             note: note,
+            cardEffect: cardEffect,
+            cardId: cardId,
           ),
           replaceId: id ?? localId,
         );
@@ -1113,40 +1163,48 @@ class Ledger extends ChangeNotifier {
   }
 
   void _moveMoney(TransactionItem item, {required bool remove}) {
+    final spend = item.cardEffect == 'spend';
+    final payment = item.cardEffect == 'payment';
     final sign = item.kind == 'income' ? 1 : -1;
     final delta = remove ? -sign * item.amount : sign * item.amount;
+    final cashDelta = spend ? 0 : delta;
     final current = summary;
     final monthName = monthKey(month);
     final inMonth = item.occurredOn.startsWith(monthName);
+    final count = payment ? 0 : 1;
     summary = Summary(
-      balance: (current?.balance ?? 0) + delta,
+      balance: (current?.balance ?? 0) + cashDelta,
       monthIncome:
           (current?.monthIncome ?? 0) +
           (inMonth && item.kind == 'income'
-              ? (remove ? -item.amount : item.amount)
+              ? count * (remove ? -item.amount : item.amount)
               : 0),
       monthExpense:
           (current?.monthExpense ?? 0) +
           (inMonth && item.kind == 'expense'
-              ? (remove ? -item.amount : item.amount)
+              ? count * (remove ? -item.amount : item.amount)
               : 0),
       categories: current?.categories ?? const [],
       accountChanges: current?.accountChanges ?? const [],
     );
     accounts = [
       for (final account in accounts)
-        if (account.id == item.accountId)
-          Account(
-            id: account.id,
-            name: account.name,
-            type: account.type,
-            openingBalance: account.openingBalance,
-            bankId: account.bankId,
-            balance: account.balance + delta,
-          )
+        if (spend && account.id == item.accountId)
+          _shiftCard(account, remove ? -item.amount : item.amount)
+        else if (account.id == item.accountId)
+          account.copyWith(balance: account.balance + cashDelta)
+        else if (payment && account.id == item.cardId)
+          _shiftCard(account, remove ? item.amount : -item.amount)
         else
           account,
     ];
+  }
+
+  Account _shiftCard(Account account, int usedChange) {
+    final cap = account.limitAmount ?? 0;
+    final used = ((account.used ?? 0) + usedChange).clamp(0, cap);
+    final available = cap - used;
+    return account.copyWith(balance: available, used: used, available: available);
   }
 
   TransactionItem _localTransaction({
@@ -1157,6 +1215,8 @@ class Ledger extends ChangeNotifier {
     required String kind,
     required String occurredOn,
     String? note,
+    String? cardEffect,
+    String? cardId,
   }) {
     final account = accounts.where((item) => item.id == accountId).firstOrNull;
     final category = categories
@@ -1172,6 +1232,8 @@ class Ledger extends ChangeNotifier {
       kind: kind,
       occurredOn: occurredOn,
       note: note,
+      cardEffect: cardEffect,
+      cardId: cardId,
     );
   }
 

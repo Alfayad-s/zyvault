@@ -1,2 +1,7 @@
 packages:
   - "apps/*"
+allowBuilds:
+  msgpackr-extract: false
+minimumReleaseAgeExclude:
+  - '@langchain/langgraph-sdk@1.15.0'
+  - '@langchain/langgraph@1.7.2'

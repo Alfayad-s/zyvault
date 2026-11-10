@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:finance_track/haptics.dart';
 import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
 import 'package:finance_track/widgets/category_icon.dart';
@@ -45,6 +46,7 @@ const _namedColors = <String, Color>{
   'services': Color(0xFFF6E7A1),
   'health': Color(0xFFB7E4C7),
   'shopping': Color(0xFFF48FB1),
+  'parent': Color(0xFFF48FB1),
   'clothes': Color(0xFFE57373),
   'salary': Color(0xFF8FCB9B),
 };
@@ -295,7 +297,7 @@ class _SpanButton extends StatelessWidget {
       selected: selected,
       label: label,
       child: GestureDetector(
-        onTap: onTap,
+        onTap: withTapHaptic(onTap),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -333,7 +335,7 @@ class _PeriodLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: withTapHaptic(onTap),
       behavior: HitTestBehavior.opaque,
       child: Text(
         label,

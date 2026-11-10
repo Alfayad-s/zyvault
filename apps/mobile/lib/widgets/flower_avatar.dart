@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:finance_track/haptics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -157,7 +158,7 @@ class _FlowerAvatarState extends State<FlowerAvatar> with SingleTickerProviderSt
         height: widget.size,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: live ? _poke : null,
+          onTap: live ? withTapHaptic(_poke) : null,
           child: Listener(
             onPointerDown: live ? (event) => _point(event.localPosition, Size(widget.size, widget.size)) : null,
             onPointerMove: live ? (event) => _point(event.localPosition, Size(widget.size, widget.size)) : null,

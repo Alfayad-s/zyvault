@@ -1,4 +1,5 @@
 import 'package:finance_track/api/finance_api.dart';
+import 'package:finance_track/haptics.dart';
 import 'package:finance_track/ledger.dart';
 import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
@@ -219,12 +220,20 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     final amount = parseMoney(_amount.text.replaceAll(',', ''));
     final accountId = _accountId;
     final categoryId = _categoryId;
+    Account? selected;
+    for (final account in widget.ledger.accounts) {
+      if (account.id == accountId) selected = account;
+    }
+    final cardSpend = selected?.isCard ?? false;
+    final payment = !cardSpend && widget.existing?.cardEffect == 'payment';
     final problem = amount == null
         ? 'Enter an amount'
         : categoryId == null
         ? 'Pick a category'
         : accountId == null
         ? 'Pick an account'
+        : cardSpend && _kind == 'income'
+        ? 'A card spend is an expense'
         : null;
     if (problem != null) {
       setState(() => _error = problem);
@@ -240,9 +249,11 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
         accountId: accountId!,
         categoryId: categoryId!,
         amount: amount!,
-        kind: _kind,
+        kind: cardSpend ? 'expense' : _kind,
         occurredOn: isoDate(_date),
         note: _note.text.trim(),
+        cardEffect: cardSpend ? 'spend' : payment ? 'payment' : null,
+        cardId: payment ? widget.existing?.cardId : null,
       );
       if (mounted) Navigator.of(context).pop();
     } on FinanceException catch (error) {
@@ -492,7 +503,10 @@ class _KindSwitch extends StatelessWidget {
         button: true,
         selected: selected,
         child: GestureDetector(
-          onTap: () => onChanged(value),
+          onTap: () {
+            pressHaptic();
+            onChanged(value);
+          },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -837,7 +851,7 @@ class _DateChip extends StatelessWidget {
       button: true,
       selected: selected,
       child: GestureDetector(
-        onTap: onTap,
+        onTap: withTapHaptic(onTap),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           height: 44,

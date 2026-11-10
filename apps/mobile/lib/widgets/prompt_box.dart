@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:finance_track/haptics.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -71,7 +71,6 @@ class _PromptBoxState extends State<PromptBox> {
   void _submit() {
     final text = _text.text.trim();
     if (text.isEmpty || widget.loading || _listening) return;
-    HapticFeedback.lightImpact();
     widget.onSend(text, language: _malayalam ? 'ml' : 'en');
     _text.clear();
     setState(() {
@@ -218,7 +217,10 @@ class _PromptBoxState extends State<PromptBox> {
                       top: 4,
                       right: 4,
                       child: GestureDetector(
-                        onTap: () => setState(() => _image = null),
+                        onTap: () {
+                          pressHaptic();
+                          setState(() => _image = null);
+                        },
                         child: Container(
                           padding: const EdgeInsets.all(2),
                           decoration: const BoxDecoration(color: Color(0xB3000000), shape: BoxShape.circle),

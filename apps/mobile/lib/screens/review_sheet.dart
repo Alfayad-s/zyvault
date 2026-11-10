@@ -1,3 +1,4 @@
+import 'package:finance_track/haptics.dart';
 import 'package:finance_track/ledger.dart';
 import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
@@ -453,7 +454,7 @@ class _ReviewCardState extends State<_ReviewCard> {
                       button: true,
                       label: 'Change amount',
                       child: GestureDetector(
-                        onTap: widget.onAmount,
+                        onTap: withTapHaptic(widget.onAmount),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [

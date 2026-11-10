@@ -1448,6 +1448,8 @@ void main() {
     expect(spend.categoryName, 'Food');
     expect(parseSpendLine('200 uber')?.categoryName, 'Transport');
     expect(parseSpendLine('5000 house rent')?.categoryName, 'Rent');
+    expect(parseSpendLine('2000 mother')?.categoryName, 'Parents');
+    expect(parseSpendLine('1500 to father')?.categoryName, 'Parents');
     expect(parseSpendLine('199 electricity')?.categoryName, 'Bills');
     expect(parseSpendLine('999 amazon shoes')?.categoryName, 'Shopping');
     expect(parseSpendLine('50 something else')?.categoryName, 'Other');

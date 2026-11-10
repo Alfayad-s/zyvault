@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { AccountsService } from '../accounts/accounts.service.js';
 import { findCategory } from '../categories/categories.service.js';
 import { FinanceCache } from '../finance/finance.cache.js';
 import { SUPABASE } from '../supabase/supabase.constants.js';
@@ -21,6 +22,8 @@ type TransactionRow = {
   kind: 'income' | 'expense';
   occurred_on: string;
   note: string | null;
+  card_effect?: 'spend' | 'payment' | null;
+  card_id?: string | null;
   account: Relation<{ name: string }>;
   category: Relation<{ name: string }>;
 };
@@ -35,10 +38,13 @@ export type Transaction = {
   kind: 'income' | 'expense';
   occurredOn: string;
   note: string | null;
+  cardEffect: 'spend' | 'payment' | null;
+  cardId: string | null;
 };
 
 const transactionSelect =
   'id, account_id, category_id, amount, kind, occurred_on, note, account:accounts(name), category:categories(name)';
+const transactionSelectWithCard = `${transactionSelect}, card_effect, card_id`;
 
 function relatedName(value: Relation<{ name: string }>): string {
   if (!value) {
@@ -61,6 +67,8 @@ function toTransaction(row: TransactionRow): Transaction {
     kind: row.kind,
     occurredOn: row.occurred_on,
     note: row.note,
+    cardEffect: row.card_effect ?? null,
+    cardId: row.card_id ?? null,
   };
 }
 
@@ -69,7 +77,10 @@ export class TransactionsService {
   constructor(
     @Inject(SUPABASE) private readonly supabase: SupabaseClient,
     private readonly cache: FinanceCache,
+    private readonly accounts: AccountsService,
   ) {}
+
+  private cardColumns = true;
 
   async list(
     userId: string,
@@ -87,7 +98,7 @@ export class TransactionsService {
       const last = start + Math.min(pageSize, limit - rows.length) - 1;
       let query = this.supabase
         .from('transactions')
-        .select(transactionSelect)
+        .select(this.cardColumns ? transactionSelectWithCard : transactionSelect)
         .eq('user_id', userId)
         .order('occurred_on', { ascending: false })
         .order('created_at', { ascending: false })
@@ -101,8 +112,12 @@ export class TransactionsService {
         query = query.gte('occurred_on', monthStart).lt('occurred_on', end);
       }
       const { data, error } = await query;
+      if (error && this.cardColumns && error.message.includes('card_effect')) {
+        this.cardColumns = false;
+        return this.list(userId, month, limit, range, offset, kind, q);
+      }
       if (error) throw new BadRequestException(error.message);
-      const page = (data ?? []) as TransactionRow[];
+      const page = (data ?? []) as unknown as TransactionRow[];
       rows.push(...page);
       if (page.length < last - start + 1) break;
     }
@@ -154,6 +169,10 @@ export class TransactionsService {
     if (inputs.some((item) => item.accountId !== accountId)) {
       throw new BadRequestException('Save a statement into one account');
     }
+    if (inputs.some((item) => item.cardEffect)) {
+      throw new BadRequestException('Save card spends one at a time');
+    }
+    await this.accounts.assertCardMove(userId, inputs[0]!);
     await this.assertRefs(userId, inputs[0]!);
     const kinds = new Map<string, string>();
     for (const item of inputs) {
@@ -168,7 +187,7 @@ export class TransactionsService {
     }
     for (let start = 0; start < inputs.length; start += 500) {
       const slice = inputs.slice(start, start + 500);
-      const { error } = await this.supabase.from('transactions').insert(slice.map((item) => this.row(userId, item)));
+      const { error } = await this.insertRows(slice.map((item) => this.row(userId, item)));
       if (error) throw new BadRequestException(error.message);
     }
     await this.cache.invalidate(userId);
@@ -176,17 +195,15 @@ export class TransactionsService {
   }
 
   async create(userId: string, input: TransactionDto): Promise<Transaction> {
+    const card = await this.accounts.assertCardMove(userId, input);
     await this.assertRefs(userId, input);
-    const { data, error } = await this.supabase
-      .from('transactions')
-      .insert(this.row(userId, input))
-      .select(transactionSelect)
-      .single();
-    if (error || !data) {
+    const { data, error } = await this.insertRows([this.row(userId, input, card)]);
+    const saved = data?.[0];
+    if (error || !saved) {
       throw new BadRequestException(error?.message ?? 'Could not save the transaction');
     }
     await this.cache.invalidate(userId);
-    return toTransaction(data as TransactionRow);
+    return toTransaction(saved as TransactionRow);
   }
 
   async update(
@@ -194,14 +211,9 @@ export class TransactionsService {
     id: string,
     input: TransactionDto,
   ): Promise<Transaction> {
+    const card = await this.accounts.assertCardMove(userId, input, id);
     await this.assertRefs(userId, input);
-    const { data, error } = await this.supabase
-      .from('transactions')
-      .update(this.row(userId, input))
-      .eq('id', id)
-      .eq('user_id', userId)
-      .select(transactionSelect)
-      .maybeSingle();
+    const { data, error } = await this.writeRow(id, userId, this.row(userId, input, card));
     if (error) {
       throw new BadRequestException(error.message);
     }
@@ -228,7 +240,14 @@ export class TransactionsService {
     await this.cache.invalidate(userId);
   }
 
-  private row(userId: string, input: TransactionDto) {
+  private row(
+    userId: string,
+    input: TransactionDto,
+    card: { card_effect: 'spend' | 'payment' | null; card_id: string | null } = {
+      card_effect: null,
+      card_id: null,
+    },
+  ) {
     return {
       user_id: userId,
       account_id: input.accountId,
@@ -237,7 +256,61 @@ export class TransactionsService {
       kind: input.kind,
       occurred_on: input.occurredOn,
       note: input.note?.trim() || null,
+      card_effect: card.card_effect,
+      card_id: card.card_id,
     };
+  }
+
+  private async insertRows(rows: ReturnType<TransactionsService['row']>[]) {
+    const select = this.cardColumns ? transactionSelectWithCard : transactionSelect;
+    const writing = this.cardColumns
+      ? rows
+      : rows.map(({ card_effect: _effect, card_id: _card, ...row }) => row);
+    if (!this.cardColumns && rows.some((row) => row.card_effect)) {
+      throw new BadRequestException('Run the latest supabase/schema.sql, then save the card again');
+    }
+    const inserted = await this.supabase.from('transactions').insert(writing).select(select);
+    if (inserted.error && this.cardColumns && inserted.error.message.includes('card_effect')) {
+      if (rows.some((row) => row.card_effect)) {
+        throw new BadRequestException('Run the latest supabase/schema.sql, then save the card again');
+      }
+      this.cardColumns = false;
+      return this.supabase
+        .from('transactions')
+        .insert(rows.map(({ card_effect: _effect, card_id: _card, ...row }) => row))
+        .select(transactionSelect);
+    }
+    return inserted;
+  }
+
+  private async writeRow(id: string, userId: string, row: ReturnType<TransactionsService['row']>) {
+    const select = this.cardColumns ? transactionSelectWithCard : transactionSelect;
+    const { card_effect: effect, card_id: cardAccount, ...plain } = row;
+    const values = this.cardColumns ? row : plain;
+    if (!this.cardColumns && (effect || cardAccount)) {
+      throw new BadRequestException('Run the latest supabase/schema.sql, then save the card again');
+    }
+    const updated = await this.supabase
+      .from('transactions')
+      .update(values)
+      .eq('id', id)
+      .eq('user_id', userId)
+      .select(select)
+      .maybeSingle();
+    if (updated.error && this.cardColumns && updated.error.message.includes('card_effect')) {
+      if (effect) {
+        throw new BadRequestException('Run the latest supabase/schema.sql, then save the card again');
+      }
+      this.cardColumns = false;
+      return this.supabase
+        .from('transactions')
+        .update(plain)
+        .eq('id', id)
+        .eq('user_id', userId)
+        .select(transactionSelect)
+        .maybeSingle();
+    }
+    return updated;
   }
 
   private async assertRefs(userId: string, input: TransactionDto) {
