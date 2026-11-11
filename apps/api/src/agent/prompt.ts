@@ -278,6 +278,20 @@ const examples: {
     today: '2026-10-18',
     reply: [],
   },
+  {
+    message: '450 biryani innale',
+    today: '2026-10-18',
+    reply: [
+      { amount: 450, currency: 'INR', merchant: null, date: '2026-10-17', rawDescription: 'biryani', kind: 'expense', category: 'Food' },
+    ],
+  },
+  {
+    message: '35k shambalam 6-nu kitti',
+    today: '2026-10-18',
+    reply: [
+      { amount: 35000, currency: 'INR', merchant: null, date: '2026-10-06', rawDescription: 'monthly salary', kind: 'income', category: 'Salary' },
+    ],
+  },
 ];
 
 export function buildUserPrompt(input: {

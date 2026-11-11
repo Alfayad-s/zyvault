@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:finance_track/haptics.dart';
+import 'package:finance_track/spoken_language.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -31,7 +32,7 @@ class _PromptBoxState extends State<PromptBox> {
   var _listening = false;
   var _closingVoice = false;
   var _seconds = 0;
-  var _malayalam = false;
+  var _language = 'en';
   String? _voiceError;
   DateTime? _started;
   Timer? _clock;
@@ -49,14 +50,14 @@ class _PromptBoxState extends State<PromptBox> {
   Future<void> _loadLanguage() async {
     final saved = (await SharedPreferences.getInstance()).getString('voice_language');
     if (!mounted || saved == null) return;
-    setState(() => _malayalam = saved == 'ml');
+    setState(() => _language = saved == 'ml' || saved == 'mg' ? saved : 'en');
   }
 
   Future<void> _switchLanguage() async {
     if (_listening) return;
-    final next = !_malayalam;
-    setState(() => _malayalam = next);
-    await (await SharedPreferences.getInstance()).setString('voice_language', next ? 'ml' : 'en');
+    final next = nextSpokenLanguage(_language);
+    setState(() => _language = next);
+    await (await SharedPreferences.getInstance()).setString('voice_language', next);
   }
 
   @override
@@ -71,7 +72,7 @@ class _PromptBoxState extends State<PromptBox> {
   void _submit() {
     final text = _text.text.trim();
     if (text.isEmpty || widget.loading || _listening) return;
-    widget.onSend(text, language: _malayalam ? 'ml' : 'en');
+    widget.onSend(text, language: replyLanguage(_language, text));
     _text.clear();
     setState(() {
       _image = null;
@@ -134,14 +135,14 @@ class _PromptBoxState extends State<PromptBox> {
   }
 
   Future<String> _localeId() async {
-    final wanted = _malayalam ? 'ml_in' : 'en_in';
+    final wanted = _language == 'ml' ? 'ml_in' : 'en_in';
     final locales = await _speech.locales();
     for (final locale in locales) {
       if (locale.localeId.replaceAll('-', '_').toLowerCase() == wanted) {
         return locale.localeId;
       }
     }
-    return _malayalam ? 'ml_IN' : 'en_IN';
+    return _language == 'ml' ? 'ml_IN' : 'en_IN';
   }
 
   Future<void> _stopListening() async {
@@ -269,7 +270,11 @@ class _PromptBoxState extends State<PromptBox> {
                       ),
                       _ModeChip(
                         icon: LucideIcons.languages,
-                        label: _malayalam ? 'മലയാളം' : 'English',
+                        label: _language == 'ml'
+                            ? 'മലയാളം'
+                            : _language == 'mg'
+                            ? 'Manglish'
+                            : 'English',
                         color: const Color(0xFFC8F57A),
                         selected: true,
                         onTap: () {

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AccountsModule } from '../accounts/accounts.module.js';
 import { AgentModule } from '../agent/agent.module.js';
 import { AuthModule } from '../auth/auth.module.js';
+import { AccessModule } from '../access/access.module.js';
 import { BudgetsModule } from '../budgets/budgets.module.js';
 import { CategoriesModule } from '../categories/categories.module.js';
 import { DebtsModule } from '../debts/debts.module.js';
@@ -14,6 +15,7 @@ import { AskService } from './ask.service.js';
   imports: [
     SupabaseModule,
     AuthModule,
+    AccessModule,
     AgentModule,
     AccountsModule,
     CategoriesModule,

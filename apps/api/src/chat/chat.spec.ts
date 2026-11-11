@@ -121,6 +121,19 @@ describe('buildChatInstruction', () => {
     expect(malayalam).toContain('selected Malayalam');
     expect(english).toContain('selected English');
     expect(english).not.toContain('Malayalam script only');
+    const manglish = buildChatInstruction({
+      clock: 'Clock: Monday, 19 October 2026, 5:30 PM IST.',
+      balance: '₹1,000',
+      monthIncome: '₹0',
+      monthExpense: '₹0',
+      categories: [],
+      accounts: [],
+      budgets: [],
+      latest: 'ethra balance undu',
+      language: 'mg',
+    });
+    expect(manglish).toContain('Manglish only');
+    expect(manglish).toContain('Ee maasam Food-nu ₹600 chilavayi.');
   });
 });
 

@@ -18,7 +18,7 @@ export type ActionContext = {
   categories: NamedKind[];
   goals: Named[];
   transactionIds: string[];
-  language?: 'ml' | 'en';
+  language?: 'ml' | 'en' | 'mg';
 };
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -244,6 +244,15 @@ function incomplete(what: string, context: ActionContext) {
 }
 
 function missingDetail(what: string, language: ActionContext['language']): string {
+  if (language === 'mg') {
+    const manglish: Record<string, string> = {
+      'an amount and whether it is income or spending':
+        'Thukayum athu varavavano chilavavano ennum venam. Athinu shesham sweekarikkan pattu.',
+      'which account': 'Ethu account ennu venam. Athinu shesham sweekarikkan pattu.',
+      'the budget amount': 'Budget thuka venam. Athinu shesham sweekarikkan pattu.',
+    };
+    return manglish[what] ?? 'Ithu sweekarikan kurachu vivarangal koodi venam.';
+  }
   if (language !== 'ml') return `I still need ${what} before you can accept it.`;
   const malayalam: Record<string, string> = {
     'an amount and whether it is income or spending':

@@ -1,7 +1,7 @@
 {
-  "versionCode": 9,
-  "versionName": "1.0.8",
-  "notes": "Credit cards show the limit, what is used, and what is free. Paying the bill frees that amount for the next purchase.",
+  "versionCode": 10,
+  "versionName": "1.0.9",
+  "notes": "Add opens Log and Lend or borrow. Intelligence follows the home layout. A new card logo is saved for everyone to use.",
   "alerts": "https://zyvault.clawdage.com/zyvault.apk",
   "basic": "https://zyvault.clawdage.com/zyvault-basic.apk"
 }

@@ -2,6 +2,8 @@ import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
 import { IsObject } from 'class-validator';
 import type { AuthUser } from '../auth/auth-user.js';
 import { AuthGuard } from '../auth/auth.guard.js';
+import { Feature } from '../access/feature.decorator.js';
+import { FeatureGuard } from '../access/feature.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { ChatService } from './chat.service.js';
 import { ChatDto } from './dto/chat.dto.js';
@@ -12,7 +14,8 @@ class ChatApplyDto {
 }
 
 @Controller('chat')
-@UseGuards(AuthGuard)
+@Feature('chat')
+@UseGuards(AuthGuard, FeatureGuard)
 export class ChatController {
   constructor(private readonly chat: ChatService) {}
 

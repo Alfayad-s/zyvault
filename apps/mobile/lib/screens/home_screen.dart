@@ -1,3 +1,4 @@
+import 'package:finance_track/access.dart';
 import 'package:finance_track/haptics.dart';
 import 'package:finance_track/ledger.dart';
 import 'package:finance_track/models.dart';
@@ -40,7 +41,7 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: ledger,
+      listenable: Listenable.merge([ledger, AppAccess.current]),
       builder: (context, _) {
         final summary = ledger.summary;
         if (ledger.loading && summary == null) {
@@ -80,14 +81,14 @@ class HomeScreen extends StatelessWidget {
           onRefresh: ledger.refresh,
           onLoadMore: ledger.loadMoreTransactions,
           loadingMore: ledger.loadingMore,
-          onType: () => openTypePage(context, ledger),
+          onType: AppAccess.current.on('voice') ? () => openTypePage(context, ledger) : null,
           viewedMonth: ledger.month,
           onPreviousMonth: () => ledger.changeMonth(-1),
           onNextMonth: _isCurrentMonth(ledger.month) ? null : () => ledger.changeMonth(1),
-          goals: GoalsStrip(ledger: ledger),
-          budgets: BudgetsCard(ledger: ledger),
-          nextPayment: ledger.nextPayment,
-          onOpenScheduled: onOpenScheduled,
+          goals: AppAccess.current.on('goals') ? GoalsStrip(ledger: ledger) : null,
+          budgets: AppAccess.current.on('budgets') ? BudgetsCard(ledger: ledger) : null,
+          nextPayment: AppAccess.current.on('plans') ? ledger.nextPayment : null,
+          onOpenScheduled: AppAccess.current.on('plans') ? onOpenScheduled : null,
         );
       },
     );
@@ -168,7 +169,9 @@ class HomeView extends StatelessWidget {
               onSend: onSend,
               accounts: [
                 for (final account in accounts)
-                  if (account.type != 'credit') account,
+                  if (!account.isCard) account,
+                for (final account in accounts)
+                  if (account.isCard) account,
               ],
               monthTransactions: monthTransactions,
               accountChanges: {
@@ -662,11 +665,18 @@ class _BalanceCardState extends State<BalanceCard> {
     setState(() => _selectedId = _selectedId == id ? null : id);
   }
 
+  /// Cash, banks, and each card's free credit, added together.
+  int get _allBalance {
+    if (widget.accounts.isEmpty) return widget.balance;
+    return widget.accounts.fold(0, (sum, account) => sum + account.balance);
+  }
+
   @override
   Widget build(BuildContext context) {
     final selected = _selected;
-    final balance = selected?.balance ?? widget.balance;
-    final monthChange = selected == null
+    final card = selected != null && selected.isCard;
+    final balance = selected?.balance ?? _allBalance;
+    final monthChange = selected == null || card
         ? widget.monthChange
         : widget.accountChanges.containsKey(selected.id)
         ? widget.accountChanges[selected.id]!
@@ -678,8 +688,9 @@ class _BalanceCardState extends State<BalanceCard> {
                     sum + (item.kind == 'income' ? item.amount : -item.amount),
               );
     final change = formatMoney(monthChange.abs());
-    final changeText =
-        '${monthChange < 0 ? '- ₹$change' : '+ ₹$change'} this month';
+    final changeText = selected != null && selected.isCard
+        ? '₹${formatMoney(selected.used ?? 0)} used'
+        : '${monthChange < 0 ? '- ₹$change' : '+ ₹$change'} this month';
     final onReceive = widget.onReceive;
     final onSend = widget.onSend;
     return Container(
@@ -750,7 +761,9 @@ class _BalanceCardState extends State<BalanceCard> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            _hidden ? '•••• this month' : changeText,
+                            _hidden
+                                ? (card ? '•••• used' : '•••• this month')
+                                : changeText,
                             style: const TextStyle(
                               color: Color(0xFF3D7A28),
                               fontSize: 18,
@@ -835,42 +848,37 @@ class _AccountLogos extends StatelessWidget {
 
   static const _size = 42.0;
   static const _step = 28.0;
-  static const _lift = 4.0;
 
   @override
   Widget build(BuildContext context) {
-    final placed = [
-      for (final (index, account) in accounts.indexed) (index, account),
+    final count = accounts.length;
+    final width = count == 0 ? _size : _size + _step * (count - 1);
+    final order = <int>[
+      for (var index = 0; index < count; index++)
+        if (accounts[index].id != selectedId) index,
+      for (var index = 0; index < count; index++)
+        if (accounts[index].id == selectedId) index,
     ];
-    // The selected logo is painted last so it sits on top of the stack.
-    placed.sort(
-      (a, b) =>
-          (a.$2.id == selectedId ? 1 : 0) - (b.$2.id == selectedId ? 1 : 0),
-    );
-    final width = _size + _step * (accounts.length - 1);
     return SizedBox(
-      height: _size + _lift,
+      height: _size,
       child: Center(
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: SizedBox(
             width: width,
-            height: _size + _lift,
+            height: _size,
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                for (final (index, account) in placed)
-                  AnimatedPositioned(
-                    key: ValueKey(account.id),
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOut,
+                for (final index in order)
+                  Positioned(
                     left: index * _step,
-                    top: account.id == selectedId ? 0 : _lift,
                     child: _LogoChip(
-                      account: account,
-                      bank: bankFor?.call(account),
-                      selected: account.id == selectedId,
-                      onTap: () => onTap(account.id),
+                      key: ValueKey(accounts[index].id),
+                      account: accounts[index],
+                      bank: bankFor?.call(accounts[index]),
+                      selected: accounts[index].id == selectedId,
+                      onTap: () => onTap(accounts[index].id),
                     ),
                   ),
               ],
@@ -884,6 +892,7 @@ class _AccountLogos extends StatelessWidget {
 
 class _LogoChip extends StatelessWidget {
   const _LogoChip({
+    super.key,
     required this.account,
     required this.bank,
     required this.selected,
@@ -907,6 +916,7 @@ class _LogoChip extends StatelessWidget {
         onTap: withTapHaptic(onTap),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
+          alignment: Alignment.center,
           width: _AccountLogos._size,
           height: _AccountLogos._size,
           decoration: BoxDecoration(
@@ -926,10 +936,38 @@ class _LogoChip extends StatelessWidget {
             ],
           ),
           child: ExcludeSemantics(
-            child: BankLogo.round(
-              bank: bank,
-              cash: account.type == 'cash',
-              size: _AccountLogos._size - 5,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                BankLogo.round(
+                  bank: bank,
+                  cash: account.type == 'cash',
+                  card: account.isCard,
+                  size: _AccountLogos._size - 5,
+                ),
+                if (account.isCard)
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E4D12),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: const Color(0xFFC8F57A),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: const Icon(
+                        LucideIcons.creditCard,
+                        size: 9,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),

@@ -5,6 +5,7 @@ import 'package:finance_track/config/api_config.dart';
 import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 class FinanceException implements Exception {
   FinanceException(this.message, {this.statusCode});
@@ -179,6 +180,15 @@ class FinanceApi {
   final http.Client _client;
   final String baseUrl;
 
+  Future<Map<String, dynamic>> me() async {
+    final body = await _send('GET', '/me');
+    return body as Map<String, dynamic>;
+  }
+
+  Future<void> setFeature(String key, bool enabled) async {
+    await _send('PATCH', '/admin/features/$key', body: {'enabled': enabled});
+  }
+
   Future<void> clearRecords() async {
     await _send('POST', '/account/clear', timeout: const Duration(seconds: 60));
   }
@@ -266,6 +276,29 @@ class FinanceApi {
     return _list(body, Bank.fromJson);
   }
 
+  Future<Bank> createCardBrand({
+    required String name,
+    required List<int> logo,
+    required String logoType,
+    required List<int> mark,
+    required String markType,
+  }) async {
+    final body = await _upload('/banks', {
+      'name': name,
+      'logo': (
+        bytes: logo,
+        type: logoType,
+        filename: _imageName('logo', logoType),
+      ),
+      'mark': (
+        bytes: mark,
+        type: markType,
+        filename: _imageName('mark', markType),
+      ),
+    });
+    return Bank.fromJson(body as Map<String, dynamic>);
+  }
+
   Future<List<Category>> categories() async {
     final body = await _send('GET', '/categories');
     return _list(body, Category.fromJson);
@@ -333,7 +366,8 @@ class FinanceApi {
         body: {
           'today': today,
           'messages': tail,
-          if (language == 'ml' || language == 'en') 'language': language,
+          if (language == 'ml' || language == 'en' || language == 'mg')
+            'language': language,
           if (remembered.isNotEmpty) 'memory': remembered,
         },
         timeout: const Duration(seconds: 20),
@@ -362,13 +396,19 @@ class FinanceApi {
   Future<AskAnswer> ask({
     required String question,
     required String today,
+    String language = 'en',
   }) async {
     final Object? body;
     try {
       body = await _send(
         'POST',
         '/ask',
-        body: {'question': question, 'today': today},
+        body: {
+          'question': question,
+          'today': today,
+          if (language == 'ml' || language == 'en' || language == 'mg')
+            'language': language,
+        },
         timeout: const Duration(seconds: 60),
       );
     } on TimeoutException {
@@ -855,9 +895,11 @@ class FinanceApi {
   }
 
   Future<Map<String, dynamic>> saveFinanceProfile(int emergencyReserve) async {
-    final body = await _send('PUT', '/finance/profile', body: {
-      'emergencyReserve': emergencyReserve,
-    });
+    final body = await _send(
+      'PUT',
+      '/finance/profile',
+      body: {'emergencyReserve': emergencyReserve},
+    );
     return body as Map<String, dynamic>;
   }
 
@@ -866,11 +908,11 @@ class FinanceApi {
     required int amount,
     int? months,
   }) async {
-    final body = await _send('POST', '/finance/simulate', body: {
-      'kind': kind,
-      'amount': amount,
-      'months': ?months,
-    });
+    final body = await _send(
+      'POST',
+      '/finance/simulate',
+      body: {'kind': kind, 'amount': amount, 'months': ?months},
+    );
     return body as Map<String, dynamic>;
   }
 
@@ -879,11 +921,15 @@ class FinanceApi {
     required String language,
     String? conversationId,
   }) async {
-    final body = await _send('POST', '/finance/chat', body: {
-      'message': message,
-      'language': language,
-      'conversationId': ?conversationId,
-    });
+    final body = await _send(
+      'POST',
+      '/finance/chat',
+      body: {
+        'message': message,
+        'language': language,
+        'conversationId': ?conversationId,
+      },
+    );
     return body as Map<String, dynamic>;
   }
 
@@ -934,6 +980,58 @@ class FinanceApi {
     }
   }
 
+  Future<Object?> _upload(
+    String path,
+    Map<String, Object> fields, {
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    try {
+      final token = await tokenProvider?.call() ?? _token;
+      if (token == null) throw AuthExpiredException();
+      var response = await _multipart(path, token, fields).timeout(timeout);
+      if (response.statusCode == 401 && onTokenRejected != null) {
+        final renewed = await onTokenRejected!();
+        if (renewed == null) throw AuthExpiredException();
+        response = await _multipart(path, renewed, fields).timeout(timeout);
+      }
+      return _decode(response);
+    } on AuthExpiredException {
+      rethrow;
+    } on FinanceException {
+      rethrow;
+    } on TimeoutException {
+      throw FinanceException('The server took too long, try again');
+    } on http.ClientException {
+      throw FinanceException('Could not reach the server');
+    }
+  }
+
+  Future<http.Response> _multipart(
+    String path,
+    String token,
+    Map<String, Object> fields,
+  ) async {
+    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl$path'));
+    request.headers['authorization'] = 'Bearer $token';
+    for (final entry in fields.entries) {
+      final value = entry.value;
+      if (value is String) {
+        request.fields[entry.key] = value;
+      } else if (value is ({List<int> bytes, String type, String filename})) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            entry.key,
+            value.bytes,
+            filename: value.filename,
+            contentType: _media(value.type),
+          ),
+        );
+      }
+    }
+    final streamed = await _client.send(request);
+    return http.Response.fromStream(streamed);
+  }
+
   Future<http.Response> _request(
     String method,
     String path,
@@ -950,6 +1048,23 @@ class FinanceApi {
     final streamed = await _client.send(request).timeout(timeout);
     return http.Response.fromStream(streamed);
   }
+}
+
+String _imageName(String name, String type) {
+  final ext = type == 'image/png'
+      ? 'png'
+      : type == 'image/webp'
+      ? 'webp'
+      : 'jpg';
+  return '$name.$ext';
+}
+
+MediaType _media(String type) {
+  final parts = type.split('/');
+  if (parts.length != 2 || parts[0].isEmpty || parts[1].isEmpty) {
+    return MediaType('image', 'jpeg');
+  }
+  return MediaType(parts[0], parts[1]);
 }
 
 List<T> _list<T>(Object? body, T Function(Map<String, dynamic>) parse) {

@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import type { AuthUser } from '../auth/auth-user.js';
 import { AuthGuard } from '../auth/auth.guard.js';
+import { AccessService } from '../access/access.service.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { TransactionDto } from './dto/transaction.dto.js';
 import { TransactionsService } from './transactions.service.js';
@@ -21,7 +22,10 @@ import { TransactionsService } from './transactions.service.js';
 @Controller('transactions')
 @UseGuards(AuthGuard)
 export class TransactionsController {
-  constructor(private readonly transactions: TransactionsService) {}
+  constructor(
+    private readonly transactions: TransactionsService,
+    private readonly access: AccessService,
+  ) {}
 
   @Get()
   list(
@@ -46,16 +50,18 @@ export class TransactionsController {
   }
 
   @Post()
-  create(@CurrentUser() user: AuthUser, @Body() body: TransactionDto) {
+  async create(@CurrentUser() user: AuthUser, @Body() body: TransactionDto) {
+    if (body.cardEffect) await this.access.assert(user, 'creditCards');
     return this.transactions.create(user.id, body);
   }
 
   @Patch(':id')
-  update(
+  async update(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: TransactionDto,
   ) {
+    if (body.cardEffect) await this.access.assert(user, 'creditCards');
     return this.transactions.update(user.id, id, body);
   }
 

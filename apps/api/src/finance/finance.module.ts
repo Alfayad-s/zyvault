@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { AgentModule } from '../agent/agent.module.js';
 import { AuthModule } from '../auth/auth.module.js';
+import { AccessModule } from '../access/access.module.js';
 import { BudgetsModule } from '../budgets/budgets.module.js';
 import { DebtsModule } from '../debts/debts.module.js';
 import { GoalsModule } from '../goals/goals.module.js';
@@ -23,6 +24,7 @@ export class FinanceInfraModule {}
   imports: [
     SupabaseModule,
     AuthModule,
+    AccessModule,
     SummaryModule,
     BudgetsModule,
     SchedulesModule,

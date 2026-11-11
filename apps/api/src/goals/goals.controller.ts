@@ -12,12 +12,15 @@ import {
 } from '@nestjs/common';
 import type { AuthUser } from '../auth/auth-user.js';
 import { AuthGuard } from '../auth/auth.guard.js';
+import { Feature } from '../access/feature.decorator.js';
+import { FeatureGuard } from '../access/feature.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { GoalDto, GoalEntryDto } from './dto/goal.dto.js';
 import { GoalsService } from './goals.service.js';
 
 @Controller('goals')
-@UseGuards(AuthGuard)
+@Feature('goals')
+@UseGuards(AuthGuard, FeatureGuard)
 export class GoalsController {
   constructor(private readonly goals: GoalsService) {}
 

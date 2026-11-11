@@ -5,8 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { isBrandId, unknownBankMessage } from '../banks/banks.js';
 import { todayInIndia } from '../finance/dates.js';
-import { accountEffect, missingDebtsTable, type DebtType } from '../debts/debts.js';
+import {
+  accountEffect,
+  missingDebtsTable,
+  type DebtType,
+} from '../debts/debts.js';
 import { allRows } from '../supabase/all-rows.js';
 import { SUPABASE } from '../supabase/supabase.constants.js';
 import { cardPosition, nextDueDate, type CardMove } from './cards.js';
@@ -53,11 +58,17 @@ export type CardSnapshot = {
   nextDue: string | null;
 };
 
-type MovementRow = { account_id: string; amount: number; kind: 'income' | 'expense' };
+type MovementRow = {
+  account_id: string;
+  amount: number;
+  kind: 'income' | 'expense';
+};
 
 type DebtMovementRow = { account_id: string; amount: number; type: DebtType };
 
-export function balancesByAccount(movements: MovementRow[]): Map<string, number> {
+export function balancesByAccount(
+  movements: MovementRow[],
+): Map<string, number> {
   const totals = new Map<string, number>();
   for (const row of movements) {
     const signed = row.kind === 'income' ? row.amount : -row.amount;
@@ -90,7 +101,12 @@ function missingBankColumn(error: { message: string } | null): boolean {
 }
 
 function missingCardColumn(error: { message: string } | null): boolean {
-  return Boolean(error && /card_kind|limit_amount|bill_day|due_day|card_effect|card_id/.test(error.message));
+  return Boolean(
+    error &&
+    /card_kind|limit_amount|bill_day|due_day|card_effect|card_id/.test(
+      error.message,
+    ),
+  );
 }
 
 @Injectable()
@@ -105,7 +121,8 @@ export class AccountsService {
         .eq('user_id', userId)
         .order('created_at', { ascending: true });
     let { data, error } = await query(columnsWithCard);
-    if (missingCardColumn(error)) ({ data, error } = await query(columnsWithBank));
+    if (missingCardColumn(error))
+      ({ data, error } = await query(columnsWithBank));
     if (missingBankColumn(error)) ({ data, error } = await query(columns));
     if (error) {
       throw new BadRequestException(error.message);
@@ -142,7 +159,9 @@ export class AccountsService {
       }),
     ]);
     const rows = ((data ?? []) as unknown as AccountRow[]).map(toAccount);
-    const moves = rows.some((account) => account.type === 'credit') ? await this.cardMoves(userId) : [];
+    const moves = rows.some((account) => account.type === 'credit')
+      ? await this.cardMoves(userId)
+      : [];
     return rows.map((account) => {
       const cash = account.openingBalance + (totals.get(account.id) ?? 0);
       if (account.type !== 'credit' || account.limitAmount == null) {
@@ -163,7 +182,11 @@ export class AccountsService {
     if (account.type !== 'credit' || account.limitAmount == null) {
       throw new BadRequestException('That account is not a card');
     }
-    const position = cardPosition(account.limitAmount, account.id, await this.cardMoves(userId));
+    const position = cardPosition(
+      account.limitAmount,
+      account.id,
+      await this.cardMoves(userId),
+    );
     return {
       limit: position.limit,
       used: position.used,
@@ -184,7 +207,10 @@ export class AccountsService {
       cardId?: string | null;
     },
     exceptId?: string,
-  ): Promise<{ card_effect: 'spend' | 'payment' | null; card_id: string | null }> {
+  ): Promise<{
+    card_effect: 'spend' | 'payment' | null;
+    card_id: string | null;
+  }> {
     const effect = input.cardEffect ?? null;
     if (!effect) {
       const account = await this.owned(userId, input.accountId);
@@ -198,15 +224,23 @@ export class AccountsService {
       if (card.type !== 'credit' || card.limitAmount == null) {
         throw new BadRequestException('That account is not a card');
       }
-      if (input.kind !== 'expense') throw new BadRequestException('A card spend is an expense');
-      const position = cardPosition(card.limitAmount, card.id, await this.cardMoves(userId), exceptId);
+      if (input.kind !== 'expense')
+        throw new BadRequestException('A card spend is an expense');
+      const position = cardPosition(
+        card.limitAmount,
+        card.id,
+        await this.cardMoves(userId),
+        exceptId,
+      );
       if (input.amount > position.available) {
         throw new BadRequestException('That is more than the card has free');
       }
       return { card_effect: 'spend', card_id: card.id };
     }
-    if (input.kind !== 'expense') throw new BadRequestException('A card payment is an expense');
-    if (!input.cardId) throw new BadRequestException('Pick the card this payment settles');
+    if (input.kind !== 'expense')
+      throw new BadRequestException('A card payment is an expense');
+    if (!input.cardId)
+      throw new BadRequestException('Pick the card this payment settles');
     const source = await this.owned(userId, input.accountId);
     if (source.type === 'credit') {
       throw new BadRequestException('Pay a card from a bank or cash account');
@@ -215,14 +249,22 @@ export class AccountsService {
     if (card.type !== 'credit' || card.limitAmount == null) {
       throw new BadRequestException('That account is not a card');
     }
-    const position = cardPosition(card.limitAmount, card.id, await this.cardMoves(userId), exceptId);
+    const position = cardPosition(
+      card.limitAmount,
+      card.id,
+      await this.cardMoves(userId),
+      exceptId,
+    );
     if (input.amount > position.used) {
-      throw new BadRequestException('That is more than the card currently owes');
+      throw new BadRequestException(
+        'That is more than the card currently owes',
+      );
     }
     return { card_effect: 'payment', card_id: card.id };
   }
 
   async create(userId: string, input: CreateAccountDto): Promise<Account> {
+    await this.ensureBank(input);
     const row = { user_id: userId, ...fields(input) };
     const insert = (values: Record<string, unknown>, select: string) =>
       this.supabase.from('accounts').insert(values).select(select).single();
@@ -231,17 +273,31 @@ export class AccountsService {
       columnsWithCard,
     );
     if (input.type === 'credit' && missingCardColumn(error)) {
-      throw new BadRequestException('Run the latest supabase/schema.sql, then add the card again');
+      throw new BadRequestException(
+        'Run the latest supabase/schema.sql, then add the card again',
+      );
     }
-    if (missingCardColumn(error)) ({ data, error } = await insert({ ...row, bank_id: bankOf(input) }, columnsWithBank));
-    if (missingBankColumn(error)) ({ data, error } = await insert(row, columns));
+    if (missingCardColumn(error))
+      ({ data, error } = await insert(
+        { ...row, bank_id: bankOf(input) },
+        columnsWithBank,
+      ));
+    if (missingBankColumn(error))
+      ({ data, error } = await insert(row, columns));
     if (error || !data) {
-      throw new BadRequestException(error?.message ?? 'Could not create the account');
+      throw new BadRequestException(
+        error?.message ?? 'Could not create the account',
+      );
     }
     return toAccount(data as unknown as AccountRow);
   }
 
-  async update(userId: string, id: string, input: CreateAccountDto): Promise<Account> {
+  async update(
+    userId: string,
+    id: string,
+    input: CreateAccountDto,
+  ): Promise<Account> {
+    await this.ensureBank(input);
     const row = fields(input);
     const change = (values: Record<string, unknown>, select: string) =>
       this.supabase
@@ -256,13 +312,31 @@ export class AccountsService {
       columnsWithCard,
     );
     if (input.type === 'credit' && missingCardColumn(error)) {
-      throw new BadRequestException('Run the latest supabase/schema.sql, then save the card again');
+      throw new BadRequestException(
+        'Run the latest supabase/schema.sql, then save the card again',
+      );
     }
-    if (missingCardColumn(error)) ({ data, error } = await change({ ...row, bank_id: bankOf(input) }, columnsWithBank));
-    if (missingBankColumn(error)) ({ data, error } = await change(row, columns));
+    if (missingCardColumn(error))
+      ({ data, error } = await change(
+        { ...row, bank_id: bankOf(input) },
+        columnsWithBank,
+      ));
+    if (missingBankColumn(error))
+      ({ data, error } = await change(row, columns));
     if (error) throw new BadRequestException(error.message);
     if (!data) throw new NotFoundException('Account not found');
     return toAccount(data as unknown as AccountRow);
+  }
+
+  async kind(userId: string, id: string): Promise<string | null> {
+    const { data, error } = await this.supabase
+      .from('accounts')
+      .select('type')
+      .eq('id', id)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) throw new BadRequestException(error.message);
+    return (data?.type as string | undefined) ?? null;
   }
 
   async remove(userId: string, id: string): Promise<void> {
@@ -273,14 +347,47 @@ export class AccountsService {
       .eq('user_id', userId)
       .select('id');
     if (error) throw new BadRequestException(error.message);
-    if (!data || data.length === 0) throw new NotFoundException('Account not found');
+    if (!data || data.length === 0)
+      throw new NotFoundException('Account not found');
+  }
+
+  private async ensureBank(input: CreateAccountDto): Promise<void> {
+    const bankId = input.type === 'cash' ? null : (input.bankId ?? null);
+    if (unknownBankMessage(input.type, bankId, false) == null) return;
+    if (!bankId || !isBrandId(bankId)) {
+      throw new BadRequestException('Pick a bank from the list');
+    }
+    const { data, error } = await this.supabase
+      .from('card_brands')
+      .select('id')
+      .eq('id', bankId)
+      .maybeSingle();
+    if (error) {
+      if (
+        error.message.includes('card_brands') ||
+        error.message.includes('schema cache')
+      ) {
+        throw new BadRequestException(
+          'Run the latest supabase/latest.sql, then add the card again',
+        );
+      }
+      throw new BadRequestException(error.message);
+    }
+    const message = unknownBankMessage(input.type, bankId, Boolean(data));
+    if (message) throw new BadRequestException(message);
   }
 
   private async owned(userId: string, id: string): Promise<Account> {
     const query = (select: string) =>
-      this.supabase.from('accounts').select(select).eq('id', id).eq('user_id', userId).maybeSingle();
+      this.supabase
+        .from('accounts')
+        .select(select)
+        .eq('id', id)
+        .eq('user_id', userId)
+        .maybeSingle();
     let { data, error } = await query(columnsWithCard);
-    if (missingCardColumn(error)) ({ data, error } = await query(columnsWithBank));
+    if (missingCardColumn(error))
+      ({ data, error } = await query(columnsWithBank));
     if (missingBankColumn(error)) ({ data, error } = await query(columns));
     if (error) throw new BadRequestException(error.message);
     if (!data) throw new BadRequestException('Account not found');
@@ -312,7 +419,11 @@ export class AccountsService {
         cardId: row.card_id,
       }));
     } catch (caught) {
-      if (caught instanceof BadRequestException && caught.message.includes('card_effect')) return [];
+      if (
+        caught instanceof BadRequestException &&
+        caught.message.includes('card_effect')
+      )
+        return [];
       throw caught;
     }
   }
@@ -328,7 +439,12 @@ function fields(input: CreateAccountDto) {
 
 function cardColumns(input: CreateAccountDto) {
   if (input.type !== 'credit') {
-    return { card_kind: null, limit_amount: null, bill_day: null, due_day: null };
+    return {
+      card_kind: null,
+      limit_amount: null,
+      bill_day: null,
+      due_day: null,
+    };
   }
   return {
     card_kind: input.cardKind,

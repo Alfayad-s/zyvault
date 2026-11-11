@@ -11,12 +11,15 @@ import {
 } from '@nestjs/common';
 import type { AuthUser } from '../auth/auth-user.js';
 import { AuthGuard } from '../auth/auth.guard.js';
+import { Feature } from '../access/feature.decorator.js';
+import { FeatureGuard } from '../access/feature.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { DebtsService } from './debts.service.js';
 import { DebtDto } from './dto/debt.dto.js';
 
 @Controller('debts')
-@UseGuards(AuthGuard)
+@Feature('people')
+@UseGuards(AuthGuard, FeatureGuard)
 export class DebtsController {
   constructor(private readonly debts: DebtsService) {}
 

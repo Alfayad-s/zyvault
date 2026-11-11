@@ -29,6 +29,26 @@ String personStatus(Person person) {
   return 'all settled';
 }
 
+class PeopleScreen extends StatelessWidget {
+  const PeopleScreen({super.key, required this.ledger});
+
+  final Ledger ledger;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Lend or borrow')),
+      body: ListenableBuilder(
+        listenable: ledger,
+        builder: (context, _) => ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+          children: [PeopleSection(ledger: ledger)],
+        ),
+      ),
+    );
+  }
+}
+
 class PeopleSection extends StatelessWidget {
   const PeopleSection({super.key, required this.ledger});
 

@@ -44,7 +44,11 @@ class ChatStore {
               review: item['review'] is String ? item['review'] as String : 'open',
               voice: item['voice'] == true,
               seconds: item['seconds'] is num ? (item['seconds'] as num).toInt() : 0,
-              language: item['language'] == 'ml' ? 'ml' : 'en',
+              language: item['language'] == 'ml'
+                  ? 'ml'
+                  : item['language'] == 'mg'
+                  ? 'mg'
+                  : 'en',
             ),
       ];
     } catch (_) {

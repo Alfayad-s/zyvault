@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:finance_track/access.dart';
 import 'package:finance_track/activity_cache.dart';
 import 'package:finance_track/api/finance_api.dart';
 import 'package:finance_track/models.dart';
@@ -67,10 +68,18 @@ class Ledger extends ChangeNotifier {
         api.transactions(month: monthKey(month), limit: transactionPageSize),
         api.accounts(),
         api.categories(),
-        api.budgets(monthKey(month)),
-        api.debts().catchError(_keepDebts),
-        api.goals().catchError(_keepGoals),
-        api.schedules().catchError(_keepPlanned),
+        AppAccess.current.on('budgets')
+            ? api.budgets(monthKey(month))
+            : Future<List<Budget>>.value(const []),
+        AppAccess.current.on('people')
+            ? api.debts().catchError(_keepDebts)
+            : Future<Debts>.value(const Debts()),
+        AppAccess.current.on('goals')
+            ? api.goals().catchError(_keepGoals)
+            : Future<List<Goal>>.value(const []),
+        AppAccess.current.on('plans')
+            ? api.schedules().catchError(_keepPlanned)
+            : Future<List<Schedule>>.value(const []),
       ]);
       if (generation != _txGeneration) return;
       summary = results[0] as Summary;
@@ -280,6 +289,7 @@ class Ledger extends ChangeNotifier {
   }
 
   Future<int> _runSchedules({bool force = false}) async {
+    if (!AppAccess.current.on('plans')) return 0;
     final now = DateTime.now();
     final last = _schedulesRunAt;
     if (!force &&
@@ -336,7 +346,9 @@ class Ledger extends ChangeNotifier {
     };
     final localId = id ?? _localId();
     final account = accounts.where((item) => item.id == accountId).firstOrNull;
-    final category = categories.where((item) => item.id == categoryId).firstOrNull;
+    final category = categories
+        .where((item) => item.id == categoryId)
+        .firstOrNull;
     await _commit(
       send: () => api.saveSchedule(
         id: id,
@@ -524,12 +536,14 @@ class Ledger extends ChangeNotifier {
                 dueDay: dueDay ?? account.dueDay,
                 used: account.used,
                 available: type == 'credit'
-                    ? ((limitAmount ?? account.limitAmount ?? 0) - (account.used ?? 0))
-                        .clamp(0, limitAmount ?? account.limitAmount ?? 0)
+                    ? ((limitAmount ?? account.limitAmount ?? 0) -
+                              (account.used ?? 0))
+                          .clamp(0, limitAmount ?? account.limitAmount ?? 0)
                     : account.available,
                 balance: type == 'credit'
-                    ? ((limitAmount ?? account.limitAmount ?? 0) - (account.used ?? 0))
-                        .clamp(0, limitAmount ?? account.limitAmount ?? 0)
+                    ? ((limitAmount ?? account.limitAmount ?? 0) -
+                              (account.used ?? 0))
+                          .clamp(0, limitAmount ?? account.limitAmount ?? 0)
                     : account.balance - account.openingBalance + openingBalance,
               )
             else
@@ -730,13 +744,37 @@ class Ledger extends ChangeNotifier {
 
   List<Bank> banks = [];
 
-  Future<List<Bank>> loadBanks() async {
-    if (banks.isNotEmpty) return banks;
+  Future<List<Bank>> loadBanks({bool refresh = false}) async {
+    if (!refresh && banks.isNotEmpty) return banks;
     try {
       banks = await api.banks();
       notifyListeners();
     } catch (_) {}
     return banks;
+  }
+
+  Future<Bank> createCardBrand({
+    required String name,
+    required List<int> logo,
+    required String logoType,
+    required List<int> mark,
+    required String markType,
+  }) async {
+    final bank = await api.createCardBrand(
+      name: name,
+      logo: logo,
+      logoType: logoType,
+      mark: mark,
+      markType: markType,
+    );
+    final index = banks.indexWhere((item) => item.id == bank.id);
+    if (index >= 0) {
+      banks = [...banks]..[index] = bank;
+    } else {
+      banks = [...banks, bank];
+    }
+    notifyListeners();
+    return bank;
   }
 
   Bank? bankFor(Account account) {
@@ -1204,7 +1242,11 @@ class Ledger extends ChangeNotifier {
     final cap = account.limitAmount ?? 0;
     final used = ((account.used ?? 0) + usedChange).clamp(0, cap);
     final available = cap - used;
-    return account.copyWith(balance: available, used: used, available: available);
+    return account.copyWith(
+      balance: available,
+      used: used,
+      available: available,
+    );
   }
 
   TransactionItem _localTransaction({

@@ -9,6 +9,7 @@ class BankLogo extends StatelessWidget {
     this.width = 64,
     this.height = 40,
     this.cash = false,
+    this.card = false,
   }) : round = false;
 
   const BankLogo.round({
@@ -16,6 +17,7 @@ class BankLogo extends StatelessWidget {
     this.bank,
     double size = 40,
     this.cash = false,
+    this.card = false,
   }) : width = size,
        height = size,
        round = true;
@@ -24,6 +26,7 @@ class BankLogo extends StatelessWidget {
   final double width;
   final double height;
   final bool cash;
+  final bool card;
   final bool round;
 
   @override
@@ -40,7 +43,11 @@ class BankLogo extends StatelessWidget {
           color: cash ? const Color(0xFF2E7D32) : const Color(0xFF3A3A3C),
         ),
         child: Icon(
-          cash ? LucideIcons.wallet : LucideIcons.landmark,
+          cash
+              ? LucideIcons.wallet
+              : card
+              ? LucideIcons.creditCard
+              : LucideIcons.landmark,
           color: Colors.white,
           size: height * 0.5,
         ),

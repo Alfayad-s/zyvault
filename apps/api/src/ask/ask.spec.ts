@@ -4,9 +4,12 @@ import {
   compareText,
   filterRows,
   previousPeriod,
+  isManglish,
   readPlan,
+  resolveLanguage,
   rupees,
   series,
+  speakPeriod,
   thisYearMonth,
   type AskRow,
 } from './ask.js';
@@ -38,7 +41,13 @@ describe('readPlan', () => {
 
   it('falls back to unknown and keeps the limit sane', () => {
     const plan = readPlan({ intent: 'weather', limit: 400, from: '2026-10-20' }, today);
-    expect([plan.intent, plan.limit, plan.from]).toEqual(['unknown', 20, today]);
+    expect([plan.intent, plan.limit, plan.from, plan.reply]).toEqual(['unknown', 20, today, '']);
+  });
+
+  it('keeps a written reply for an explanation', () => {
+    const plan = readPlan({ intent: 'explain', reply: 'Save a little each week.' }, today);
+    expect(plan.intent).toBe('explain');
+    expect(plan.reply).toBe('Save a little each week.');
   });
 });
 
@@ -93,7 +102,19 @@ describe('answers', () => {
 
   it('compares with the same length of time before', () => {
     expect(previousPeriod('2026-10-01', '2026-10-18')).toEqual({ from: '2026-09-13', to: '2026-09-30' });
+    expect(speakPeriod('this month', 'ml')).toBe('ഈ മാസം');
+    expect(speakPeriod('this month', 'mg')).toBe('ee maasam');
+    expect(speakPeriod('in September', 'ml')).toBe('സെപ്റ്റംബറിൽ');
+    expect(speakPeriod('in September', 'mg')).toBe('Septemberil');
+    expect(isManglish('ethra balance undu')).toBe(true);
+    expect(isManglish('how much did I spend')).toBe(false);
+    expect(isManglish('എത്ര ചെലവായി')).toBe(false);
+    expect(resolveLanguage('en', 'ethra balance undu')).toBe('mg');
+    expect(resolveLanguage('ml', 'ethra balance undu')).toBe('ml');
+    expect(resolveLanguage('en', 'എത്ര ചെലവായി')).toBe('en');
+    expect(speakPeriod('from 1 Oct to 18 Oct', 'ml')).toBe('1 ഒക്ടോബർ മുതൽ 18 ഒക്ടോബർ വരെ');
     expect(compareText(60000, 50000)).toBe(' That is ₹100 more than the period before (20%).');
+    expect(compareText(60000, 50000, 'ml')).toBe(' കഴിഞ്ഞ കാലയളവിനേക്കാൾ ₹100 കൂടുതലാണ് (20%).');
     expect(compareText(40000, 50000)).toBe(' That is ₹100 less than the period before (20%).');
   });
 
@@ -106,6 +127,10 @@ describe('answers', () => {
     ] as Account[];
     expect(balanceAnswer(plan, accounts, null).answer).toBe('You have ₹2,000 across 2 accounts.');
     expect(balanceAnswer(plan, accounts, accounts[0]).answer).toBe('HDFC has ₹1,500.');
+    expect(balanceAnswer(plan, accounts, null, 'ml').answer).toBe('2 അക്കൗണ്ടുകളിലായി ₹2,000 ഉണ്ട്.');
+    expect(balanceAnswer(plan, accounts, null, 'mg').answer).toBe('2 accountsilayi ₹2,000 undu.');
+    expect(balanceAnswer(plan, accounts, accounts[0], 'ml').answer).toBe('HDFC-ൽ ₹1,500 ഉണ്ട്.');
+    expect(balanceAnswer(plan, accounts, accounts[0], 'mg').answer).toBe('HDFC-il ₹1,500 undu.');
   });
 
   it('explains who owes whom', () => {

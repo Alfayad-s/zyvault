@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import type { Account } from '../accounts/accounts.service.js';
 import { AccountsService } from '../accounts/accounts.service.js';
 import { LlmClient } from '../agent/llm.client.js';
-import { rupees } from '../ask/ask.js';
+import { isManglishReply, resolveLanguage, rupees } from '../ask/ask.js';
 import type { Budget } from '../budgets/budgets.service.js';
 import { BudgetsService } from '../budgets/budgets.service.js';
 import type { Category } from '../categories/categories.service.js';
@@ -52,8 +52,9 @@ export class ChatService {
       this.goals.list(userId).catch(() => []),
     ]);
     const latest = messages.at(-1)?.content ?? '';
-    const malayalam = body.language === 'ml' || (body.language !== 'en' && isMalayalam(latest));
-    if (this.finance && asksAboutMoney(latest)) {
+    const language = resolveLanguage(body.language, latest);
+    const malayalam = language === 'ml';
+    if (this.finance && asksAboutMoney(latest) && language !== 'mg') {
       const answer = await this.finance.chat(userId, latest, malayalam ? 'ml' : 'en');
       return { reply: answer.reply, proposal: null };
     }
@@ -71,7 +72,7 @@ export class ChatService {
       incomeCategories: categories.filter((category) => category.kind === 'income').map((category) => category.name),
       goals: goals.map((goal) => `${goal.id} ${goal.name}`),
       latest,
-      language: body.language === 'ml' || body.language === 'en' ? body.language : malayalam ? 'ml' : 'en',
+      language,
     });
     const context = {
       today: body.today,
@@ -79,7 +80,7 @@ export class ChatService {
       categories,
       goals,
       transactionIds: recent.map((transaction) => transaction.id),
-      language: malayalam ? ('ml' as const) : ('en' as const),
+      language,
     };
     let text = await this.llm.chat(instruction, messages);
     let parsed = readChatTurn(text);
@@ -92,6 +93,18 @@ export class ChatService {
         ),
       );
       if (isMalayalam(again.reply)) {
+        parsed = again;
+        resolved = resolveAction(parsed.action, context);
+      }
+    }
+    if (language === 'mg' && !resolved.problem && !isManglishReply(parsed.reply)) {
+      const again = readChatTurn(
+        await this.llm.chat(
+          `${instruction}\n\nWrite the reply field again in Manglish only: Malayalam words in English letters. Not Malayalam script. Not English.`,
+          messages,
+        ),
+      );
+      if (isManglishReply(again.reply)) {
         parsed = again;
         resolved = resolveAction(parsed.action, context);
       }

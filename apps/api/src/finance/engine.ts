@@ -74,6 +74,7 @@ export type HealthComponent = {
   score: number | null;
   weight: number;
   detail: string;
+  series: number[];
 };
 
 export type HealthScore = {
@@ -358,6 +359,10 @@ function clampScore(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
+function points(values: Array<number | null>): number[] {
+  return values.flatMap((value) => (value == null ? [] : [value]));
+}
+
 export function buildHealth(input: {
   months: MonthTotals[];
   budgets: { limitAmount: number; spent: number }[];
@@ -377,6 +382,19 @@ export function buildHealth(input: {
   const emergencyScore = input.typicalMonthlyExpense <= 0
     ? null
     : clampScore((input.emergencyReserve / input.typicalMonthlyExpense / 3) * 100);
+  const savingsSeries = points(
+    input.months.map((month) => (month.income === 0 && month.expense === 0 ? null : month.income > month.expense ? 100 : 0)),
+  );
+  const expenseSeries = points(
+    input.months.map((month) => (month.income <= 0 ? null : clampScore((1 - month.expense / month.income) * 100))),
+  );
+  const recurringSeries = points(
+    input.months.map((month) => (month.income <= 0 ? null : clampScore((1 - input.recurringExpense / month.income) * 100))),
+  );
+  const reserveSeries = points(
+    input.months.map((month) => (month.expense <= 0 ? null : clampScore((input.emergencyReserve / month.expense / 3) * 100))),
+  );
+  const budgetSeries = budgetScore == null ? [] : [budgetScore, budgetScore];
   const components: HealthComponent[] = [
     {
       id: 'savingsConsistency',
@@ -384,6 +402,7 @@ export function buildHealth(input: {
       score: savingsScore,
       weight: healthWeights.savingsConsistency,
       detail: withIncome.length === 0 ? 'No months to compare yet.' : `${savedMonths} of ${withIncome.length} months had more income than spending.`,
+      series: savingsSeries,
     },
     {
       id: 'expenseToIncome',
@@ -391,6 +410,7 @@ export function buildHealth(input: {
       score: expenseScore,
       weight: healthWeights.expenseToIncome,
       detail: expenseScore == null ? 'This month has no income yet, so this part is left out.' : `Spending is ${rupees(latest?.expense ?? 0)} against income of ${rupees(latest?.income ?? 0)}.`,
+      series: expenseSeries,
     },
     {
       id: 'budgetDiscipline',
@@ -398,6 +418,7 @@ export function buildHealth(input: {
       score: budgetScore,
       weight: healthWeights.budgetDiscipline,
       detail: budgetScore == null ? 'No budgets yet.' : `${input.budgets.filter((item) => item.spent <= item.limitAmount).length} of ${input.budgets.length} budgets are within the limit.`,
+      series: budgetSeries,
     },
     {
       id: 'recurringBurden',
@@ -405,6 +426,7 @@ export function buildHealth(input: {
       score: recurringScore,
       weight: healthWeights.recurringBurden,
       detail: recurringScore == null ? 'This month has no income yet, so this part is left out.' : `Monthly plans total ${rupees(input.recurringExpense)}.`,
+      series: recurringSeries,
     },
     {
       id: 'emergencyReserve',
@@ -412,6 +434,7 @@ export function buildHealth(input: {
       score: emergencyScore,
       weight: healthWeights.emergencyReserve,
       detail: emergencyScore == null ? 'There is no recent spending to compare with the reserve.' : `${rupees(input.emergencyReserve)} covers about ${input.typicalMonthlyExpense === 0 ? 0 : Math.round((input.emergencyReserve / input.typicalMonthlyExpense) * 10) / 10} months of typical spending. Three months scores 100.`,
+      series: reserveSeries,
     },
   ];
   const active = components.filter((item) => item.score != null);

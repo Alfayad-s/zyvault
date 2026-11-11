@@ -9,8 +9,10 @@ import 'package:finance_track/period.dart';
 import 'package:finance_track/reminders.dart';
 import 'package:finance_track/home_screen_widget.dart';
 import 'package:finance_track/screens/accounts_screen.dart';
+import 'package:finance_track/screens/people_section.dart';
 import 'package:finance_track/screens/budgets_section.dart';
 import 'package:finance_track/screens/ask_sheet.dart';
+import 'package:finance_track/spoken_language.dart';
 import 'package:finance_track/screens/goals_section.dart';
 import 'package:finance_track/screens/transaction_form_screen.dart';
 import 'package:finance_track/screens/home_screen.dart';
@@ -159,6 +161,17 @@ void main() {
                 bankId: 'sbi',
                 balance: 5800000,
               ),
+              Account(
+                id: 'hdfc-card',
+                name: 'HDFC Credit',
+                type: 'credit',
+                openingBalance: 0,
+                bankId: 'hdfc',
+                balance: 8000000,
+                used: 2000000,
+                available: 8000000,
+                limitAmount: 10000000,
+              ),
             ],
             monthTransactions: const [
               TransactionItem(
@@ -184,33 +197,52 @@ void main() {
                 note: 'food',
               ),
             ],
-            bankFor: (account) => account.bankId == 'sbi'
-                ? const Bank(
-                    id: 'sbi',
-                    name: 'State Bank of India',
-                    short: 'SBI',
-                    color: 0xFF22409A,
-                  )
-                : null,
+            bankFor: (account) {
+              if (account.bankId == 'sbi') {
+                return const Bank(
+                  id: 'sbi',
+                  name: 'State Bank of India',
+                  short: 'SBI',
+                  color: 0xFF22409A,
+                );
+              }
+              if (account.bankId == 'hdfc') {
+                return const Bank(
+                  id: 'hdfc',
+                  name: 'HDFC Bank',
+                  short: 'HDFC',
+                  color: 0xFF004C8F,
+                );
+              }
+              return null;
+            },
           ),
         ),
       ),
     );
 
     expect(find.text('All accounts'), findsOneWidget);
-    expect(find.text('₹60,000.00'), findsOneWidget);
+    expect(find.text('₹140,000.00'), findsOneWidget);
+    expect(find.bySemanticsLabel('Show HDFC Credit balance'), findsOneWidget);
     await tester.tap(find.bySemanticsLabel('Show State Bank of India balance'));
     await tester.pumpAndSettle();
     expect(find.text('State Bank of India'), findsOneWidget);
     expect(find.text('₹58,000.00'), findsOneWidget);
     expect(find.text('+ ₹50,000.00 this month'), findsOneWidget);
+    await tester.tap(find.bySemanticsLabel('Show HDFC Credit balance'));
+    await tester.pumpAndSettle();
+    expect(find.text('HDFC Credit'), findsOneWidget);
+    expect(find.text('₹80,000.00'), findsOneWidget);
+    expect(find.text('₹20,000.00 used'), findsOneWidget);
+    expect(find.text('₹60,000.00'), findsNothing);
     await tester.tap(
       find.bySemanticsLabel(
-        'State Bank of India selected, tap to show all accounts',
+        'HDFC Credit selected, tap to show all accounts',
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('₹60,000.00'), findsOneWidget);
+    expect(find.text('All accounts'), findsOneWidget);
+    expect(find.text('₹140,000.00'), findsOneWidget);
   });
 
   testWidgets('balance card eye hides and shows the amount', (tester) async {
@@ -732,7 +764,7 @@ void main() {
     await ledger.refresh();
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: AccountsScreen(ledger: ledger)),
+        home: PeopleScreen(ledger: ledger),
       ),
     );
     await tester.pumpAndSettle();
@@ -740,7 +772,7 @@ void main() {
     expect(find.text('you owe ₹1,000'), findsOneWidget);
     expect(find.text('₹300'), findsOneWidget);
 
-    await tester.tap(find.text('Lend or borrow'));
+    await tester.tap(find.widgetWithText(TextButton, 'Lend or borrow'));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextField, 'Friend\'s name'),
@@ -913,6 +945,10 @@ void main() {
       'show my swiggy orders',
       'did i spend more than last month?',
       'ഈ മാസം എത്ര ചെലവായി',
+      'give me a plan',
+      'savings plan for rent',
+      'explain an emergency fund',
+      'what is a budget',
     ]) {
       expect(looksLikeQuestion(question), isTrue, reason: question);
     }
@@ -921,9 +957,15 @@ void main() {
       'lent 500 to ravi',
       'got 35k salary',
       'my rent 12000',
+      'who made this app',
+      'who is the author',
     ]) {
       expect(looksLikeQuestion(spend), isFalse, reason: spend);
     }
+    expect(looksLikeAuthor('who made this app'), isTrue);
+    expect(looksLikeAuthor('who is the author of this application'), isTrue);
+    expect(looksLikeAuthor('ആരാണ് ഇത് ഉണ്ടാക്കിയത്'), isTrue);
+    expect(looksLikeAuthor('who owes me'), isFalse);
   });
 
   testWidgets('answer sheet shows the answer, bars and items', (tester) async {
@@ -959,6 +1001,7 @@ void main() {
       find.text('You spent ₹600 on Food this month in 2 payments.'),
       findsOneWidget,
     );
+    expect(find.text('Read'), findsOneWidget);
     expect(find.text('Highest ₹450'), findsOneWidget);
     expect(find.text('1 Oct'), findsOneWidget);
     expect(find.text('₹600'), findsOneWidget);
@@ -1662,6 +1705,17 @@ void main() {
     expect(verified, 'me@example.com 12345678');
   });
 
+  test('english chip sends a manglish question as manglish', () {
+    expect(replyLanguage('en', 'ethra balance undu'), 'mg');
+    expect(replyLanguage('en', 'how much did I spend'), 'en');
+    expect(replyLanguage('en', 'എത്ര ചെലവായി'), 'en');
+    expect(replyLanguage('ml', 'ethra balance undu'), 'ml');
+    expect(replyLanguage('mg', 'how much do I have'), 'mg');
+    expect(nextSpokenLanguage('en'), 'ml');
+    expect(nextSpokenLanguage('ml'), 'mg');
+    expect(nextSpokenLanguage('mg'), 'en');
+  });
+
   testWidgets('type page uses a large centered field', (
     WidgetTester tester,
   ) async {
@@ -1689,9 +1743,18 @@ void main() {
     );
     await tester.pump();
     expect(
-      find.bySemanticsLabel('Voice language Malayalam, tap for English'),
+      find.bySemanticsLabel('Voice language Malayalam, tap for Manglish'),
       findsOneWidget,
     );
+    await tester.tap(
+      find.bySemanticsLabel('Voice language Malayalam, tap for Manglish'),
+    );
+    await tester.pump();
+    expect(
+      find.bySemanticsLabel('Voice language Manglish, tap for English'),
+      findsOneWidget,
+    );
+    expect(find.text('MG'), findsOneWidget);
 
     await tester.enterText(
       find.byType(TextField),
@@ -1868,7 +1931,8 @@ void main() {
           bottomNavigationBar: FinanceBottomBar(
             index: selected,
             onChanged: (index) => selected = index,
-            onAdd: () {},
+            onLog: () {},
+            onLend: () {},
           ),
         ),
       ),
@@ -1882,5 +1946,10 @@ void main() {
 
     await tester.tap(find.bySemanticsLabel('Money'));
     expect(selected, 2);
+
+    await tester.tap(find.bySemanticsLabel('Add'));
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('Log'), findsOneWidget);
+    expect(find.bySemanticsLabel('Lend or borrow'), findsOneWidget);
   });
 }

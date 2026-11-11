@@ -13,6 +13,8 @@ import {
 } from '@nestjs/common';
 import type { AuthUser } from '../auth/auth-user.js';
 import { AuthGuard } from '../auth/auth.guard.js';
+import { Feature } from '../access/feature.decorator.js';
+import { FeatureGuard } from '../access/feature.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { isHorizon } from './dates.js';
 import { FeedbackDto, FinanceChatDto, FinanceJobDto, ProfileDto, SimulateDto } from './dto/finance.dto.js';
@@ -20,26 +22,30 @@ import { FinanceService } from './finance.service.js';
 import type { FinanceQueue } from './finance.queue.js';
 
 @Controller('finance')
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, FeatureGuard)
 export class FinanceController {
   constructor(private readonly finance: FinanceService) {}
 
   @Get('overview')
+  @Feature('intelligence')
   overview(@CurrentUser() user: AuthUser) {
     return this.finance.overview(user.id);
   }
 
   @Get('forecast')
+  @Feature('intelligence')
   forecast(@CurrentUser() user: AuthUser, @Query('days') days?: string) {
     return this.finance.forecast(user.id, this.horizon(days));
   }
 
   @Post('forecast/refresh')
+  @Feature('intelligence')
   refresh(@CurrentUser() user: AuthUser, @Query('days') days?: string) {
     return this.finance.enqueue(user.id, 'cash-flow-forecast', days ? this.horizon(days) : 30);
   }
 
   @Get('safe-to-spend')
+  @Feature('intelligence')
   safe(@CurrentUser() user: AuthUser) {
     return this.finance.safeToSpend(user.id);
   }
@@ -50,11 +56,13 @@ export class FinanceController {
   }
 
   @Get('insights')
+  @Feature('intelligence')
   insights(@CurrentUser() user: AuthUser) {
     return this.finance.insights(user.id);
   }
 
   @Get('anomalies')
+  @Feature('intelligence')
   anomalies(@CurrentUser() user: AuthUser) {
     return this.finance.anomalies(user.id);
   }
@@ -70,21 +78,25 @@ export class FinanceController {
   }
 
   @Post('simulate')
+  @Feature('intelligence')
   simulate(@CurrentUser() user: AuthUser, @Body() body: SimulateDto) {
     return this.finance.simulate(user.id, body);
   }
 
   @Post('chat')
+  @Feature('intelligence')
   chat(@CurrentUser() user: AuthUser, @Body() body: FinanceChatDto) {
     return this.finance.chat(user.id, body.message, body.language ?? 'en', body.conversationId);
   }
 
   @Get('chat')
+  @Feature('intelligence')
   chats(@CurrentUser() user: AuthUser) {
     return this.finance.conversations(user.id);
   }
 
   @Get('chat/:id')
+  @Feature('intelligence')
   chatOne(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.finance.conversation(user.id, id);
   }

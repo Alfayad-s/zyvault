@@ -20,8 +20,8 @@ export class ChatDto {
   memory?: string;
 
   @IsOptional()
-  @IsIn(['en', 'ml'])
-  language?: 'en' | 'ml';
+  @IsIn(['en', 'ml', 'mg'])
+  language?: 'en' | 'ml' | 'mg';
 
   @ArrayMinSize(1)
   @ArrayMaxSize(8)

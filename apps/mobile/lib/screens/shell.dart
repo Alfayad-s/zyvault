@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:finance_track/access.dart';
 import 'package:finance_track/api/finance_api.dart';
 import 'package:finance_track/app_update.dart';
 import 'package:finance_track/build_flags.dart';
@@ -15,6 +16,7 @@ import 'package:finance_track/screens/accounts_screen.dart';
 import 'package:finance_track/screens/chat_screen.dart';
 import 'package:finance_track/screens/home_screen.dart';
 import 'package:finance_track/screens/intelligence_screen.dart';
+import 'package:finance_track/screens/people_section.dart';
 import 'package:finance_track/screens/profile_screen.dart';
 import 'package:finance_track/screens/scheduled_screen.dart';
 import 'package:finance_track/screens/transaction_form_screen.dart';
@@ -69,6 +71,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _widgetClicks = HomeScreenWidget.clicks.listen(_openFromWidget);
     HomeScreenWidget.launchedWith().then(_openFromWidget);
     ProfilePhoto.load();
+    AppAccess.current.load(widget.api);
     WidgetsBinding.instance.addPostFrameCallback((_) => _offerUpdate());
     ledger.refresh().then((_) async {
       await Push.start(widget.api);
@@ -79,6 +82,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   Future<void> _watchMoneyAlerts() async {
     if (!SmsInbox.supported) return;
+    if (!AppAccess.current.on('bankSms') && !AppAccess.current.on('upiAlerts')) {
+      _smsPoll?.cancel();
+      return;
+    }
     await SmsInbox.ensureReceivePermission();
     _startPolling();
     final watchSms = await SmsInbox.enabled();
@@ -131,6 +138,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   Future<void> _openFromWidget(Uri? link) async {
     if (link == null || link.host != 'type' || !mounted) return;
+    if (!AppAccess.current.on('voice')) return;
     final now = DateTime.now();
     if (link == _lastWidgetLink &&
         _lastWidgetAt != null &&
@@ -225,6 +233,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (_reviewingSms || !mounted || !_foreground || !SmsInbox.supported) {
       return;
     }
+    if (!AppAccess.current.on('bankSms') && !AppAccess.current.on('upiAlerts')) return;
     if (ledger.accounts.isEmpty || ledger.categories.isEmpty) return;
     _reviewingSms = true;
     try {
@@ -260,18 +269,15 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void _openProfile() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (context) => Scaffold(
-          appBar: AppBar(title: const Text('Profile')),
-          body: ProfileScreen(
-            ledger: ledger,
-            lock: widget.lock,
-            onLogout: () async {
-              Navigator.of(context).popUntil((route) => route.isFirst);
-              await Push.stop(widget.api);
-              await widget.onLogout();
-            },
-            onCheckSms: _watchMoneyAlerts,
-          ),
+        builder: (context) => ProfileScreen(
+          ledger: ledger,
+          lock: widget.lock,
+          onLogout: () async {
+            Navigator.of(context).popUntil((route) => route.isFirst);
+            await Push.stop(widget.api);
+            await widget.onLogout();
+          },
+          onCheckSms: _watchMoneyAlerts,
         ),
       ),
     );
@@ -279,94 +285,113 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final pages = [
-      HomeScreen(
-        ledger: ledger,
-        onReceive: () => _openTransaction('income'),
-        onSend: () => _openTransaction('expense'),
-        onOpenRecords: () => setState(() => _index = 1),
-        onOpenScheduled: () => setState(() => _index = 3),
-        onOpenTransaction: (transaction) {
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (context) =>
-                  TransactionFormScreen(ledger: ledger, existing: transaction),
-            ),
-          );
-        },
-      ),
-      TransactionsScreen(ledger: ledger),
-      AccountsScreen(ledger: ledger),
-      ScheduledScreen(ledger: ledger, embedded: true),
-    ];
-    return Scaffold(
-      extendBody: true,
-      appBar: AppBar(
-        leading: IconButton(
-          tooltip: 'Search',
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (context) => SearchScreen(ledger: ledger),
-              ),
-            );
-          },
-          icon: const Icon(LucideIcons.search),
-        ),
-        title: Text(FinanceBottomBar.labels[_index]),
-        actions: [
-          IconButton(
-            tooltip: 'Intelligence',
-            onPressed: () {
+    return ListenableBuilder(
+      listenable: AppAccess.current,
+      builder: (context, _) {
+        final plans = AppAccess.current.on('plans');
+        final index = plans ? _index : _index.clamp(0, 2);
+        final pages = [
+          HomeScreen(
+            ledger: ledger,
+            onReceive: () => _openTransaction('income'),
+            onSend: () => _openTransaction('expense'),
+            onOpenRecords: () => setState(() => _index = 1),
+            onOpenScheduled: plans ? () => setState(() => _index = 3) : null,
+            onOpenTransaction: (transaction) {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (context) => IntelligenceScreen(api: widget.api),
+                  builder: (context) =>
+                      TransactionFormScreen(ledger: ledger, existing: transaction),
                 ),
               );
             },
-            icon: const Icon(LucideIcons.chartNoAxesCombined),
           ),
-          IconButton(
-            tooltip: 'Chat',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (context) => ChatScreen(api: widget.api),
+          TransactionsScreen(ledger: ledger),
+          AccountsScreen(ledger: ledger),
+          if (plans) ScheduledScreen(ledger: ledger, embedded: true),
+        ];
+        return Scaffold(
+          extendBody: true,
+          appBar: AppBar(
+            leading: IconButton(
+              tooltip: 'Search',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (context) => SearchScreen(ledger: ledger),
+                  ),
+                );
+              },
+              icon: const Icon(LucideIcons.search),
+            ),
+            title: Text(FinanceBottomBar.labels[index]),
+            actions: [
+              if (AppAccess.current.on('intelligence'))
+                IconButton(
+                  tooltip: 'Intelligence',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (context) => IntelligenceScreen(api: widget.api),
+                      ),
+                    );
+                  },
+                  icon: const Icon(LucideIcons.chartNoAxesCombined),
                 ),
-              );
-            },
-            icon: const FlowerAvatar(animate: false, size: 28),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: IconButton(
-              tooltip: 'Profile',
-              onPressed: _openProfile,
-              icon: ValueListenableBuilder<String?>(
-                valueListenable: ProfilePhoto.current,
-                builder: (context, path, _) => CircleAvatar(
-                  radius: 16,
-                  backgroundColor: const Color(0xFFC8F57A),
-                  backgroundImage: path == null ? null : FileImage(File(path)),
-                  child: path == null
-                      ? const Icon(
-                          LucideIcons.user,
-                          size: 16,
-                          color: Color(0xFF17310C),
-                        )
-                      : null,
+              if (AppAccess.current.on('chat'))
+                IconButton(
+                  tooltip: 'Chat',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (context) => ChatScreen(api: widget.api),
+                      ),
+                    );
+                  },
+                  icon: const FlowerAvatar(animate: false, size: 28),
+                ),
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: IconButton(
+                  tooltip: 'Profile',
+                  onPressed: _openProfile,
+                  icon: ValueListenableBuilder<String?>(
+                    valueListenable: ProfilePhoto.current,
+                    builder: (context, path, _) => CircleAvatar(
+                      radius: 16,
+                      backgroundColor: const Color(0xFFC8F57A),
+                      backgroundImage: path == null ? null : FileImage(File(path)),
+                      child: path == null
+                          ? const Icon(
+                              LucideIcons.user,
+                              size: 16,
+                              color: Color(0xFF17310C),
+                            )
+                          : null,
+                    ),
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
-      body: IndexedStack(index: _index, children: pages),
-      bottomNavigationBar: FinanceBottomBar(
-        index: _index,
-        onChanged: (index) => setState(() => _index = index),
-        onAdd: () => _openTransaction('expense'),
-      ),
+          body: IndexedStack(index: index, children: pages),
+          bottomNavigationBar: FinanceBottomBar(
+            index: index,
+            showPlans: plans,
+            onChanged: (next) => setState(() => _index = next),
+            onLog: () => _openTransaction('expense'),
+            onLend: AppAccess.current.on('people')
+                ? () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (context) => PeopleScreen(ledger: ledger),
+                      ),
+                    );
+                  }
+                : null,
+          ),
+        );
+      },
     );
   }
 }

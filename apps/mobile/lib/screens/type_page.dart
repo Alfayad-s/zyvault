@@ -6,6 +6,7 @@ import 'package:finance_track/api/finance_api.dart';
 import 'package:finance_track/celebration.dart';
 import 'package:finance_track/ledger.dart';
 import 'package:finance_track/screens/ask_sheet.dart';
+import 'package:finance_track/spoken_language.dart';
 import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
 import 'package:file_picker/file_picker.dart';
@@ -843,7 +844,9 @@ class _TypePageState extends State<TypePage>
       final review = await loadReviewBeforeSave();
       if (!mounted) return;
       setState(() {
-        if (saved != null) _voiceLanguage = saved;
+        if (saved == 'en' || saved == 'ml' || saved == 'mg') {
+          _voiceLanguage = saved!;
+        }
         _accountId = account;
         _review = review;
       });
@@ -939,7 +942,7 @@ class _TypePageState extends State<TypePage>
 
   Future<void> _switchVoiceLanguage() async {
     if (_listening) return;
-    final next = _voiceLanguage == 'ml' ? 'en' : 'ml';
+    final next = nextSpokenLanguage(_voiceLanguage);
     setState(() {
       _voiceLanguage = next;
       _error = null;
@@ -1103,6 +1106,12 @@ class _TypePageState extends State<TypePage>
       setState(() => _error = 'Type an amount, a space, then what it was for');
       return;
     }
+    if (looksLikeAuthor(text)) {
+      FocusScope.of(context).unfocus();
+      await showAuthor(context);
+      if (mounted) _text.clear();
+      return;
+    }
     if (looksLikeQuestion(text)) {
       await _ask(text);
       return;
@@ -1151,14 +1160,21 @@ class _TypePageState extends State<TypePage>
       _error = null;
     });
     try {
+      final language = replyLanguage(_voiceLanguage, question);
       final answer = await widget.ledger.api.ask(
         question: question,
         today: isoDate(DateTime.now()),
+        language: language,
       );
       if (!mounted) return;
       setState(() => _saving = false);
       HapticFeedback.lightImpact();
-      await showAskAnswer(context, question: question, answer: answer);
+      await showAskAnswer(
+        context,
+        question: question,
+        answer: answer,
+        language: language,
+      );
       if (mounted) _text.clear();
     } on FinanceException catch (caught) {
       if (!mounted) return;
@@ -1299,7 +1315,7 @@ class _TypePageState extends State<TypePage>
       () => _error = mentionsGoal(text, widget.ledger.goals)
           ? 'Saving to a goal needs the AI. Try again in a moment, or tap the goal on Home'
           : looksLikeLoan(text)
-          ? 'Lending and borrowing needs the AI. Try again in a moment, or add it in Money → People'
+          ? 'Lending and borrowing needs the AI. Try again in a moment, or open Lend or borrow from Add'
           : 'Planning future or monthly money needs the AI. Try again in a moment',
     );
     return null;
@@ -1801,7 +1817,7 @@ class _TypePageState extends State<TypePage>
                                 ),
                                 const SizedBox(width: 20),
                                 _LanguageChip(
-                                  malayalam: _voiceLanguage == 'ml',
+                                  language: _voiceLanguage,
                                   onPressed: _listening || _saving
                                       ? null
                                       : _switchVoiceLanguage,
@@ -1822,6 +1838,8 @@ class _TypePageState extends State<TypePage>
                                     child = Text(
                                       _voiceLanguage == 'ml'
                                           ? 'കേൾക്കുന്നു… stop talking or tap the mic when done'
+                                          : _voiceLanguage == 'mg'
+                                          ? 'Listening in Manglish… stop talking or tap the mic when done'
                                           : 'Listening… stop talking or tap the mic when done',
                                       key: const ValueKey('listening'),
                                       textAlign: TextAlign.center,
@@ -1836,6 +1854,8 @@ class _TypePageState extends State<TypePage>
                                     child = Text(
                                       _voiceLanguage == 'ml'
                                           ? 'Try “ഇന്നലെ ബിരിയാണിക്ക് 340 രൂപ”\nor “450 pizza with friends”'
+                                          : _voiceLanguage == 'mg'
+                                          ? 'Try “450 biryani innale”\nor “ethra balance undu”'
                                           : 'Try “450 pizza with friends”\nor “got 35k salary on 6th”',
                                       key: ValueKey('examples-$_voiceLanguage'),
                                       textAlign: TextAlign.center,
@@ -2073,17 +2093,21 @@ class _PayAvatar extends StatelessWidget {
 }
 
 class _LanguageChip extends StatelessWidget {
-  const _LanguageChip({required this.malayalam, required this.onPressed});
+  const _LanguageChip({required this.language, required this.onPressed});
 
-  final bool malayalam;
+  final String language;
   final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
+    final malayalam = language == 'ml';
+    final manglish = language == 'mg';
     return Semantics(
       button: true,
       label: malayalam
-          ? 'Voice language Malayalam, tap for English'
+          ? 'Voice language Malayalam, tap for Manglish'
+          : manglish
+          ? 'Voice language Manglish, tap for English'
           : 'Voice language English, tap for Malayalam',
       child: SizedBox(
         width: 48,
@@ -2097,11 +2121,15 @@ class _LanguageChip extends StatelessWidget {
             child: Center(
               child: ExcludeSemantics(
                 child: Text(
-                  malayalam ? 'മ' : 'EN',
+                  malayalam
+                      ? 'മ'
+                      : manglish
+                      ? 'MG'
+                      : 'EN',
                   style: TextStyle(
                     color: onPressed == null
                         ? const Color(0xFF5C5C60)
-                        : malayalam
+                        : malayalam || manglish
                         ? const Color(0xFFC8F57A)
                         : Colors.white,
                     fontSize: malayalam ? 18 : 13,

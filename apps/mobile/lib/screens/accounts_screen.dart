@@ -1,10 +1,10 @@
+import 'package:finance_track/access.dart';
 import 'package:finance_track/api/finance_api.dart';
 import 'package:finance_track/haptics.dart';
 import 'package:finance_track/ledger.dart';
 import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
 import 'package:finance_track/screens/credit_card_screen.dart';
-import 'package:finance_track/screens/people_section.dart';
 import 'package:finance_track/widgets/bank_logo.dart';
 import 'package:finance_track/widgets/pull_refresh.dart';
 import 'package:flutter/material.dart';
@@ -24,100 +24,109 @@ class AccountsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: ledger,
+      listenable: Listenable.merge([ledger, AppAccess.current]),
       builder: (context, _) {
         return PullRefresh(
           onRefresh: ledger.refresh,
           child: ListView(
-          physics: pullPhysics,
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
-          children: [
-            if (ledger.accounts.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 32),
-                child: Text(
-                  'Add your bank accounts and cash to start tracking.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: _muted),
-                ),
-              )
-            else
-              Material(
-                color: _card,
-                borderRadius: BorderRadius.circular(22),
-                clipBehavior: Clip.antiAlias,
-                child: Column(
-                  children: [
-                    for (final (index, account) in ledger.accounts.indexed) ...[
-                      if (index > 0) const Divider(height: 1, color: _line),
-                      _AccountRow(
-                        account: account,
-                        bank: ledger.bankFor(account),
-                        onTap: () => account.isCard
-                            ? _openCard(context, account)
-                            : _editAccount(context, account),
-                      ),
+            physics: pullPhysics,
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+            children: [
+              if (ledger.accounts.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 32),
+                  child: Text(
+                    'Add your bank accounts and cash to start tracking.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: _muted),
+                  ),
+                )
+              else
+                Material(
+                  color: _card,
+                  borderRadius: BorderRadius.circular(22),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    children: [
+                      for (final (index, account)
+                          in ledger.accounts.indexed) ...[
+                        if (index > 0) const Divider(height: 1, color: _line),
+                        _AccountRow(
+                          account: account,
+                          bank: ledger.bankFor(account),
+                          onTap: () =>
+                              account.isCard &&
+                                  AppAccess.current.on('creditCards')
+                              ? _openCard(context, account)
+                              : _editAccount(context, account),
+                        ),
+                      ],
                     ],
-                  ],
-                ),
-              ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 56,
-              child: OutlinedButton.icon(
-                onPressed: () => _addCard(context, 'fd'),
-                icon: const Icon(LucideIcons.landmark),
-                label: const Text('FD-backed card'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: _line),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 56,
-              child: OutlinedButton.icon(
-                onPressed: () => _addCard(context, 'bank'),
-                icon: const Icon(LucideIcons.creditCard),
-                label: const Text('Bank card'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: _line),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 56,
-              child: FilledButton.icon(
-                onPressed: () => _addAccount(context),
-                icon: const Icon(LucideIcons.plus),
-                label: const Text('Add account'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
                   ),
                 ),
+              if (AppAccess.current.on('creditCards')) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 56,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _addCard(context, 'fd'),
+                    icon: const Icon(LucideIcons.landmark),
+                    label: const Text('FD-backed card'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: _line),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 56,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _addCard(context, 'bank'),
+                    icon: const Icon(LucideIcons.creditCard),
+                    label: const Text('Bank card'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: _line),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 56,
+                child: FilledButton.icon(
+                  onPressed: () => _addAccount(context),
+                  icon: const Icon(LucideIcons.plus),
+                  label: const Text('Add account'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 32),
-            PeopleSection(ledger: ledger),
-          ],
+            ],
           ),
         );
       },
@@ -162,9 +171,14 @@ class AccountsScreen extends StatelessWidget {
   }
 
   Future<void> _addCard(BuildContext context, String kind) async {
-    final banks = await ledger.loadBanks();
+    final banks = await ledger.loadBanks(refresh: true);
     if (!context.mounted) return;
-    final result = await showCardEditor(context, banks: banks, kind: kind);
+    final result = await showCardEditor(
+      context,
+      banks: banks,
+      kind: kind,
+      onCreateBrand: ledger.createCardBrand,
+    );
     if (result == null || !context.mounted) return;
     try {
       await ledger.createAccount(
@@ -292,7 +306,9 @@ class _AccountRow extends StatelessWidget {
             ),
           ),
           Text(
-            card ? 'free of ${formatRupees(account.limitAmount ?? 0)}' : 'balance',
+            card
+                ? 'free of ${formatRupees(account.limitAmount ?? 0)}'
+                : 'balance',
             style: const TextStyle(color: _muted, fontSize: 12),
           ),
         ],

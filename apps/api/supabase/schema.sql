@@ -492,4 +492,58 @@ drop policy if exists "users manage their finance jobs" on public.finance_jobs;
 create policy "users manage their finance jobs" on public.finance_jobs
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+create table if not exists public.app_roles (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  role text not null default 'member' check (role in ('admin', 'member'))
+);
+
+create table if not exists public.app_features (
+  key text primary key,
+  enabled boolean not null default true
+);
+
+insert into public.app_features (key, enabled) values
+  ('chat', true),
+  ('intelligence', true),
+  ('voice', true),
+  ('bankSms', true),
+  ('upiAlerts', true),
+  ('creditCards', true),
+  ('goals', true),
+  ('people', true),
+  ('budgets', true),
+  ('plans', true)
+on conflict (key) do nothing;
+
+alter table public.app_roles enable row level security;
+alter table public.app_features enable row level security;
+drop policy if exists "users read their role" on public.app_roles;
+create policy "users read their role" on public.app_roles
+  for select using (auth.uid() = user_id);
+drop policy if exists "signed-in users read features" on public.app_features;
+create policy "signed-in users read features" on public.app_features
+  for select using (auth.role() = 'authenticated');
+grant select on public.app_roles to authenticated, service_role;
+grant select, insert, update on public.app_roles to service_role;
+grant select on public.app_features to authenticated, service_role;
+grant select, insert, update on public.app_features to service_role;
+
+-- Card and bank logos added by people, shared so anyone can pick them.
+create table if not exists public.card_brands (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  short text not null,
+  logo_url text not null,
+  mark_url text not null,
+  created_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create unique index if not exists card_brands_name_idx on public.card_brands (lower(name));
+alter table public.card_brands enable row level security;
+drop policy if exists "signed-in users read card brands" on public.card_brands;
+create policy "signed-in users read card brands" on public.card_brands
+  for select using (auth.role() = 'authenticated');
+grant select on public.card_brands to authenticated, service_role;
+grant insert, update on public.card_brands to service_role;
+
 notify pgrst, 'reload schema';

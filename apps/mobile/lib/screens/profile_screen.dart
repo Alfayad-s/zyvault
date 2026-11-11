@@ -1,21 +1,14 @@
 import 'dart:io';
+import 'dart:math' as math;
 
+import 'package:finance_track/access.dart';
 import 'package:finance_track/api/finance_api.dart';
-import 'package:finance_track/haptics.dart';
-import 'package:finance_track/build_flags.dart';
 import 'package:finance_track/app_lock.dart';
+import 'package:finance_track/haptics.dart';
 import 'package:finance_track/ledger.dart';
-import 'package:finance_track/models.dart';
-import 'package:finance_track/notifications.dart';
+import 'package:finance_track/money.dart';
 import 'package:finance_track/person_profile.dart';
-import 'package:finance_track/screens/person_edit_screen.dart';
-import 'package:finance_track/push.dart';
-import 'package:finance_track/reminders.dart';
-import 'package:finance_track/reply_voice.dart';
-import 'package:finance_track/screens/categories_screen.dart';
-import 'package:finance_track/screens/review_sheet.dart';
-import 'package:finance_track/screens/server_status_screen.dart';
-import 'package:finance_track/sms/sms_inbox.dart';
+import 'package:finance_track/screens/settings_screen.dart';
 import 'package:finance_track/widgets/pull_refresh.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -24,8 +17,26 @@ import 'package:path_provider/path_provider.dart';
 
 const _card = Color(0xFF2C2C2E);
 const _muted = Color(0xFF8E8E93);
+const _ink = Color(0xFF1E4D12);
+const _lime = Color(0xFFC8F57A);
 
-class ProfileScreen extends StatelessWidget {
+const _partOrder = [
+  'savingsConsistency',
+  'expenseToIncome',
+  'budgetDiscipline',
+  'recurringBurden',
+  'emergencyReserve',
+];
+
+const _partLabels = {
+  'savingsConsistency': 'Savings consistency',
+  'expenseToIncome': 'Spending against income',
+  'budgetDiscipline': 'Budget discipline',
+  'recurringBurden': 'Recurring plans',
+  'emergencyReserve': 'Emergency reserve',
+};
+
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
     super.key,
     required this.ledger,
@@ -40,237 +51,480 @@ class ProfileScreen extends StatelessWidget {
   final Future<void> Function()? onCheckSms;
 
   @override
-  Widget build(BuildContext context) {
-    final lock = this.lock;
-    return PullRefresh(
-      onRefresh: () async {
-        await Future.wait([
-          ledger.refresh(),
-          PersonProfile.load(),
-          ProfilePhoto.load(),
-        ]);
-      },
-      child: ListView(
-      physics: pullPhysics,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
-      children: [
-        const _ProfileHeader(),
-        const SizedBox(height: 22),
-        if (lock != null) ...[
-          _SettingsSection(
-            title: 'Security',
-            children: [
-              ListenableBuilder(
-                listenable: lock,
-                builder: (context, _) => SwitchListTile(
-                  value: lock.enabled,
-                  onChanged: (value) => _toggleLock(context, lock, value),
-                  secondary: const Icon(
-                    LucideIcons.fingerprint,
-                    color: Colors.white,
-                  ),
-                  title: const Text(
-                    'Unlock with fingerprint',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  subtitle: const Text(
-                    'Ask for fingerprint, face or phone PIN when the app opens',
-                    style: TextStyle(color: _muted, fontSize: 13),
-                  ),
-                  activeThumbColor: const Color(0xFF17310C),
-                  activeTrackColor: const Color(0xFFC8F57A),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 22),
-        ],
-        _SettingsSection(
-          title: 'Money',
-          children: [
-            const _ReviewSwitch(),
-            ListTile(
-              leading: const Icon(LucideIcons.tags, color: Colors.white),
-              title: const Text(
-                'Categories',
-                style: TextStyle(color: Colors.white),
-              ),
-              subtitle: const Text(
-                'Add your own with a 3D icon',
-                style: TextStyle(color: _muted, fontSize: 13),
-              ),
-              trailing: const Icon(LucideIcons.chevronRight, color: _muted),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => CategoriesScreen(ledger: ledger),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 22),
-        _SettingsSection(
-          title: 'Voice',
-          children: [
-            ListTile(
-              leading: const Icon(LucideIcons.languages, color: Colors.white),
-              title: const Text(
-                'Install Malayalam speech',
-                style: TextStyle(color: Colors.white),
-              ),
-              subtitle: const Text(
-                'Opens Google’s voice download so Read can speak Malayalam',
-                style: TextStyle(color: _muted, fontSize: 13),
-              ),
-              trailing: const Icon(LucideIcons.chevronRight, color: _muted),
-              onTap: () async {
-                final problem = await ReplyVoice.openMalayalamInstall();
-                if (problem != null && context.mounted) {
-                  _show(context, problem);
-                }
-              },
-            ),
-          ],
-        ),
-        const SizedBox(height: 22),
-        _AlertSettings(ledger: ledger, onCheckSms: onCheckSms),
-        const SizedBox(height: 8),
-        Center(
-          child: TextButton(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => ServerStatusScreen(api: ledger.api),
-              ),
-            ),
-            child: const Text('Server details', style: TextStyle(color: Color(0xFFC8F57A))),
-          ),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 54,
-          child: OutlinedButton.icon(
-            onPressed: () => _clearData(context),
-            icon: const Icon(LucideIcons.trash2),
-            label: const Text('Remove all data'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFFFF6B6B),
-              side: const BorderSide(color: Color(0xFF3A3A3C)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 54,
-          child: OutlinedButton.icon(
-            onPressed: onLogout,
-            icon: const Icon(LucideIcons.logOut),
-            label: const Text('Sign out'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFFFF6B6B),
-              side: const BorderSide(color: Color(0xFF3A3A3C)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
-            ),
-          ),
-        ),
-      ],
-      ),
-    );
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  List<_HealthPart>? _parts;
+  int? _score;
+  String? _error;
+  var _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
   }
 
-  Future<void> _clearData(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: _card,
-        title: const Text('Remove all data?'),
-        content: const Text(
-          'Payments, accounts, budgets, plans, people, and goals will be deleted. Your name, photo, and sign-in stay. This cannot be undone.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Keep')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove data', style: TextStyle(color: Color(0xFFFF6B6B))),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !context.mounted) return;
+  Future<void> _load() async {
     try {
-      await ledger.clearRecords();
-      if (context.mounted) _show(context, 'Your data was removed');
+      final body = await widget.ledger.api.financeHealth();
+      if (!mounted) return;
+      setState(() {
+        _score = (body['score'] as num?)?.round();
+        _parts = _readParts(body['components']);
+        _error = null;
+        _loading = false;
+      });
     } on FinanceException catch (error) {
-      if (context.mounted) _show(context, error.message);
+      if (!mounted) return;
+      setState(() {
+        _error = error.message;
+        _loading = false;
+      });
     } catch (caught) {
-      if (context.mounted) _show(context, '$caught');
+      if (!mounted) return;
+      setState(() {
+        _error = '$caught';
+        _loading = false;
+      });
     }
   }
 
-  static void _show(BuildContext context, String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+  Future<void> _refresh() async {
+    await Future.wait([
+      widget.ledger.refresh(),
+      PersonProfile.load(),
+      ProfilePhoto.load(),
+      AppAccess.current.load(widget.ledger.api),
+      _load(),
+    ]);
   }
 
-  Future<void> _toggleLock(
-    BuildContext context,
-    AppLock lock,
-    bool value,
-  ) async {
-    final problem = await lock.setEnabled(value);
-    if (problem != null && context.mounted) _show(context, problem);
+  void _openSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SettingsScreen(
+          ledger: widget.ledger,
+          lock: widget.lock,
+          onLogout: widget.onLogout,
+          onCheckSms: widget.onCheckSms,
+        ),
+      ),
+    );
   }
-}
-
-class _SettingsSection extends StatelessWidget {
-  const _SettingsSection({required this.title, required this.children});
-
-  final String title;
-  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    final rows = <Widget>[];
-    for (var index = 0; index < children.length; index++) {
-      if (index > 0) {
-        rows.add(const Divider(height: 1, color: Color(0xFF3A3A3C)));
-      }
-      rows.add(children[index]);
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-          child: Text(
-            title,
-            style: const TextStyle(
-              color: _muted,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.4,
-            ),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Profile'),
+        actions: [
+          IconButton(
+            tooltip: 'Settings',
+            onPressed: _openSettings,
+            icon: const Icon(LucideIcons.settings),
           ),
+        ],
+      ),
+      body: PullRefresh(
+        onRefresh: _refresh,
+        child: ListView(
+          physics: pullPhysics,
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+          children: [
+            _ProfileHeader(score: _loading ? null : _score, waiting: _loading),
+            if (_error != null) ...[
+              const SizedBox(height: 16),
+              Text(_error!, style: const TextStyle(color: _muted, height: 1.4)),
+            ] else if (!_loading && _score != null && _lowestDetail(_parts ?? const []) != null) ...[
+              const SizedBox(height: 14),
+              Text(
+                _lowestDetail(_parts ?? const [])!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: _muted, fontSize: 15, height: 1.4),
+              ),
+            ] else if (!_loading && _score == null) ...[
+              const SizedBox(height: 14),
+              const Text(
+                'There is not enough history yet.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: _muted, fontSize: 15, height: 1.4),
+              ),
+            ],
+            const SizedBox(height: 22),
+            _AnalyticsBento(ledger: widget.ledger, parts: _parts ?? const []),
+          ],
         ),
-        Container(
-          decoration: BoxDecoration(
-            color: _card,
-            borderRadius: BorderRadius.circular(22),
-          ),
-          child: Column(children: rows),
-        ),
-      ],
+      ),
     );
   }
 }
 
+class _HealthPart {
+  const _HealthPart({
+    required this.id,
+    required this.label,
+    required this.score,
+    required this.detail,
+    required this.series,
+  });
+
+  final String id;
+  final String label;
+  final int? score;
+  final String detail;
+  final List<double> series;
+}
+
+List<_HealthPart> _readParts(Object? raw) {
+  final byId = <String, _HealthPart>{};
+  if (raw is List) {
+    for (final item in raw) {
+      if (item is! Map) continue;
+      final id = item['id'] as String? ?? '';
+      if (id.isEmpty) continue;
+      byId[id] = _HealthPart(
+        id: id,
+        label: item['label'] as String? ?? _partLabels[id] ?? id,
+        score: (item['score'] as num?)?.round(),
+        detail: item['detail'] as String? ?? '',
+        series: [
+          for (final point in item['series'] as List<dynamic>? ?? const [])
+            if (point is num) point.toDouble().clamp(0, 100).toDouble(),
+        ],
+      );
+    }
+  }
+  return [
+    for (final id in _partOrder)
+      byId[id] ??
+          _HealthPart(
+            id: id,
+            label: _partLabels[id] ?? id,
+            score: null,
+            detail: '',
+            series: const [],
+          ),
+  ];
+}
+
+String _band(int score) {
+  if (score >= 85) return 'Strong';
+  if (score >= 70) return 'Good';
+  if (score >= 40) return 'Fair';
+  return 'Needs care';
+}
+
+String? _lowestDetail(List<_HealthPart> parts) {
+  _HealthPart? lowest;
+  for (final part in parts) {
+    final score = part.score;
+    if (score == null) continue;
+    if (lowest == null || score < lowest.score!) lowest = part;
+  }
+  final detail = lowest?.detail.trim() ?? '';
+  return detail.isEmpty ? null : detail;
+}
+
+class _RingPainter extends CustomPainter {
+  const _RingPainter(this.progress);
+
+  final double? progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - 5;
+    final track = Paint()
+      ..color = const Color(0xFF3A3A3C)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 7
+      ..strokeCap = StrokeCap.round;
+    canvas.drawCircle(center, radius, track);
+    final value = progress;
+    if (value == null || value <= 0) return;
+    final arc = Paint()
+      ..color = _lime
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 7
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -math.pi / 2,
+      math.pi * 2 * value.clamp(0, 1),
+      false,
+      arc,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_RingPainter oldDelegate) => oldDelegate.progress != progress;
+}
+
+class _AnalyticsBento extends StatelessWidget {
+  const _AnalyticsBento({required this.ledger, required this.parts});
+
+  final Ledger ledger;
+  final List<_HealthPart> parts;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: ledger,
+      builder: (context, _) {
+        final summary = ledger.summary;
+        final saved = summary == null
+            ? null
+            : summary.monthIncome - summary.monthExpense;
+        return Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 6,
+                  child: _BentoTile(
+                    height: 148,
+                    label: 'On hand',
+                    value: summary == null ? '—' : '₹${formatMoney(summary.balance)}',
+                    note: 'Cash and bank',
+                    accent: true,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 5,
+                  child: Column(
+                    children: [
+                      _BentoTile(
+                        height: 69,
+                        label: 'Income',
+                        value: summary == null ? '—' : '₹${formatMoney(summary.monthIncome)}',
+                      ),
+                      const SizedBox(height: 10),
+                      _BentoTile(
+                        height: 69,
+                        label: 'Spent',
+                        value: summary == null ? '—' : '₹${formatMoney(summary.monthExpense)}',
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _BentoTile(
+              height: 96,
+              label: 'Saved this month',
+              value: saved == null
+                  ? '—'
+                  : '${saved < 0 ? '-' : ''}₹${formatMoney(saved.abs())}',
+              note: saved != null && saved < 0 ? 'Spent more than came in' : 'Income minus spending',
+            ),
+            const SizedBox(height: 10),
+            for (var index = 0; index < parts.length; index += 2) ...[
+              if (index > 0) const SizedBox(height: 10),
+              if (index + 1 >= parts.length)
+                _PartTile(part: parts[index])
+              else
+                Row(
+                  children: [
+                    Expanded(child: _PartTile(part: parts[index])),
+                    const SizedBox(width: 10),
+                    Expanded(child: _PartTile(part: parts[index + 1])),
+                  ],
+                ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _BentoTile extends StatelessWidget {
+  const _BentoTile({
+    required this.height,
+    required this.label,
+    required this.value,
+    this.note,
+    this.accent = false,
+  });
+
+  final double height;
+  final String label;
+  final String value;
+  final String? note;
+  final bool accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: height,
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: accent ? _lime : _card,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: accent ? _ink : _muted,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: accent ? _ink : Colors.white,
+              fontSize: height > 100 ? 26 : 18,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+            ),
+          ),
+          if (note != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              note!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: accent ? _ink.withValues(alpha: 0.7) : _muted,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PartTile extends StatelessWidget {
+  const _PartTile({required this.part});
+
+  final _HealthPart part;
+
+  @override
+  Widget build(BuildContext context) {
+    final score = part.score;
+    return Container(
+      height: 128,
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            part.label,
+            maxLines: 2,
+            style: const TextStyle(
+              color: _muted,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              height: 1.2,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            score == null ? 'Not enough yet' : '$score',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _Sparkline(
+            values: part.series.isNotEmpty
+                ? part.series
+                : score == null
+                ? const []
+                : [score.toDouble(), score.toDouble()],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Sparkline extends StatelessWidget {
+  const _Sparkline({required this.values});
+
+  final List<double> values;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 36,
+      width: double.infinity,
+      child: CustomPaint(painter: _SparkPainter(values)),
+    );
+  }
+}
+
+class _SparkPainter extends CustomPainter {
+  const _SparkPainter(this.values);
+
+  final List<double> values;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.length < 2 || size.width <= 0 || size.height <= 0) return;
+    final points = <Offset>[
+      for (var index = 0; index < values.length; index++)
+        Offset(
+          size.width * index / (values.length - 1),
+          size.height - 2 - (values[index].clamp(0, 100) / 100) * (size.height - 4),
+        ),
+    ];
+    final line = Path()..moveTo(points.first.dx, points.first.dy);
+    for (var index = 0; index < points.length - 1; index++) {
+      final current = points[index];
+      final next = points[index + 1];
+      final mid = Offset((current.dx + next.dx) / 2, (current.dy + next.dy) / 2);
+      line.quadraticBezierTo(current.dx, current.dy, mid.dx, mid.dy);
+    }
+    line.lineTo(points.last.dx, points.last.dy);
+    final fill = Path.from(line)
+      ..lineTo(points.last.dx, size.height)
+      ..lineTo(points.first.dx, size.height)
+      ..close();
+    canvas.drawPath(fill, Paint()..color = _lime.withValues(alpha: 0.22));
+    canvas.drawPath(
+      line,
+      Paint()
+        ..color = _lime
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+    canvas.drawCircle(points.last, 2.5, Paint()..color = _lime);
+  }
+
+  @override
+  bool shouldRepaint(_SparkPainter oldDelegate) => oldDelegate.values != values;
+}
+
 class _ProfileHeader extends StatefulWidget {
-  const _ProfileHeader();
+  const _ProfileHeader({required this.score, required this.waiting});
+
+  final int? score;
+  final bool waiting;
 
   @override
   State<_ProfileHeader> createState() => _ProfileHeaderState();
@@ -282,6 +536,49 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
     super.initState();
     PersonProfile.load();
     ProfilePhoto.load();
+  }
+
+  Future<void> _editName() async {
+    final person = PersonProfile.current.value;
+    final saved = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1C1C1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) => _NameSheet(initial: person.name),
+    );
+    if (saved == null || !mounted) return;
+    await PersonProfile(
+      name: saved,
+      age: person.age,
+      working: person.working,
+      salaryRupees: person.salaryRupees,
+      payday: person.payday,
+      startedOn: person.startedOn,
+    ).save();
+  }
+
+  Future<void> _editStarted(PersonProfile person) async {
+    final current = DateTime.tryParse(person.startedOn ?? '') ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+    );
+    if (picked == null || !mounted) return;
+    final month = picked.month.toString().padLeft(2, '0');
+    final day = picked.day.toString().padLeft(2, '0');
+    await PersonProfile(
+      name: person.name,
+      age: person.age,
+      working: person.working,
+      salaryRupees: person.salaryRupees,
+      payday: person.payday,
+      startedOn: '${picked.year}-$month-$day',
+    ).save();
   }
 
   Future<void> _choose() async {
@@ -302,6 +599,11 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
               title: const Text('Choose a photo', style: TextStyle(color: Colors.white)),
               onTap: () => Navigator.pop(context, 'gallery'),
             ),
+            ListTile(
+              leading: const Icon(LucideIcons.user, color: Colors.white),
+              title: const Text('Change name', style: TextStyle(color: Colors.white)),
+              onTap: () => Navigator.pop(context, 'name'),
+            ),
             if (ProfilePhoto.current.value != null)
               ListTile(
                 leading: const Icon(LucideIcons.trash2, color: Color(0xFFFF6B6B)),
@@ -315,6 +617,10 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
     if (choice == null || !mounted) return;
     if (choice == 'remove') {
       await ProfilePhoto.clear();
+      return;
+    }
+    if (choice == 'name') {
+      await _editName();
       return;
     }
     try {
@@ -332,7 +638,11 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
       await ProfilePhoto.remember(saved.path);
     } catch (error) {
       debugPrint('Profile photo: $error');
-      if (mounted) ProfileScreen._show(context, 'Could not save that photo. Try again');
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(content: Text('Could not save that photo. Try again')));
+      }
     }
   }
 
@@ -341,361 +651,171 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
     return ValueListenableBuilder<String?>(
       valueListenable: ProfilePhoto.current,
       builder: (context, path, _) => ValueListenableBuilder<PersonProfile>(
-      valueListenable: PersonProfile.current,
-      builder: (context, person, _) {
-        final started = person.startedOn;
-        return Column(
-      children: [
-        GestureDetector(
-          onTap: withTapHaptic(_choose),
-          child: Stack(
-            clipBehavior: Clip.none,
+        valueListenable: PersonProfile.current,
+        builder: (context, person, _) {
+          final started = person.startedOn;
+          final score = widget.score;
+          return Column(
             children: [
-              CircleAvatar(
-                radius: 48,
-                backgroundColor: const Color(0xFFC8F57A),
-                backgroundImage: path == null ? null : FileImage(File(path)),
-                child: path == null
-                    ? const Icon(LucideIcons.user, size: 36, color: Color(0xFF17310C))
-                    : null,
-              ),
-              Positioned(
-                right: -2,
-                bottom: -2,
-                child: Container(
-                  width: 30,
-                  height: 30,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF17310C),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFF161616), width: 2),
+              GestureDetector(
+                onTap: withTapHaptic(_choose),
+                child: SizedBox(
+                  width: 148,
+                  height: 148,
+                  child: CustomPaint(
+                    painter: _RingPainter(
+                      widget.waiting || score == null ? null : score / 100,
+                    ),
+                    child: Center(
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          CircleAvatar(
+                            radius: 52,
+                            backgroundColor: _lime,
+                            backgroundImage: path == null ? null : FileImage(File(path)),
+                            child: path == null
+                                ? const Icon(LucideIcons.user, size: 36, color: Color(0xFF17310C))
+                                : null,
+                          ),
+                          Positioned(
+                            right: -2,
+                            bottom: -2,
+                            child: Container(
+                              width: 30,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF17310C),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: const Color(0xFF161616), width: 2),
+                              ),
+                              child: const Icon(LucideIcons.camera, size: 14, color: _lime),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  child: const Icon(LucideIcons.camera, size: 14, color: Color(0xFFC8F57A)),
                 ),
               ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              person.name.isEmpty ? 'Your name' : person.name,
-              style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
-            ),
-            IconButton(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => PersonEditScreen(profile: person)),
+              const SizedBox(height: 8),
+              Text(
+                widget.waiting ? 'Score' : score == null ? 'No score yet' : '$score · ${_band(score)}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              icon: const Icon(LucideIcons.pencil, size: 18, color: Color(0xFFC8F57A)),
-            ),
-          ],
-        ),
-        if (person.age != null || started != null)
-          Text(
-            [
-              if (person.age != null) '${person.age} years',
-              if (started != null) 'since ${started.split('-').reversed.join('-')}',
-            ].join(' | '),
-            style: const TextStyle(color: _muted, fontSize: 15),
-          ),
-      ],
-        );
-      },
-      ),
-    );
-  }
-}
-
-class _ReviewSwitch extends StatefulWidget {
-  const _ReviewSwitch();
-
-  @override
-  State<_ReviewSwitch> createState() => _ReviewSwitchState();
-}
-
-class _ReviewSwitchState extends State<_ReviewSwitch> {
-  bool? _on;
-
-  @override
-  void initState() {
-    super.initState();
-    loadReviewBeforeSave().then((value) {
-      if (mounted) setState(() => _on = value);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SwitchListTile(
-      value: _on ?? true,
-      onChanged: _on == null
-          ? null
-          : (value) {
-              setState(() => _on = value);
-              saveReviewBeforeSave(value);
-            },
-      secondary: const Icon(LucideIcons.listChecks, color: Colors.white),
-      title: const Text(
-        'Review before saving',
-        style: TextStyle(color: Colors.white),
-      ),
-      subtitle: const Text(
-        'Check what the AI understood, then tap Save',
-        style: TextStyle(color: _muted, fontSize: 13),
-      ),
-      activeThumbColor: const Color(0xFF17310C),
-      activeTrackColor: const Color(0xFFC8F57A),
-    );
-  }
-}
-
-class _AlertSettings extends StatefulWidget {
-  const _AlertSettings({required this.ledger, this.onCheckSms});
-
-  final Ledger ledger;
-  final Future<void> Function()? onCheckSms;
-
-  @override
-  State<_AlertSettings> createState() => _AlertSettingsState();
-}
-
-class _AlertSettingsState extends State<_AlertSettings> {
-  var _reminders = true;
-  var _payments = true;
-  var _budgets = true;
-  var _serverPush = false;
-  var _sms = false;
-  var _apps = false;
-  var _spam = <String>[];
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final reminders = await Reminders.enabled();
-    final payments = await Notifier.isOn(paymentAlertsKey);
-    final budgets = await Notifier.isOn(budgetAlertsKey);
-    final serverPush = await Push.serverHandlesReminders();
-    final sms = await SmsInbox.enabled();
-    final apps = await SmsInbox.appsEnabled();
-    final spam = SmsInbox.supported ? await SmsInbox.spamSenders() : <String>[];
-    if (!mounted) return;
-    setState(() {
-      _reminders = reminders;
-      _payments = payments;
-      _budgets = budgets;
-      _serverPush = serverPush;
-      _sms = sms;
-      _apps = apps;
-      _spam = spam;
-    });
-  }
-
-  Future<void> _setApps(bool value) async {
-    if (!value) {
-      await SmsInbox.disableApps();
-      if (mounted) setState(() => _apps = false);
-      return;
-    }
-    try {
-      final problem = await SmsInbox.enableApps();
-      if (!mounted) return;
-      if (problem != null) {
-        ProfileScreen._show(context, problem);
-        return;
-      }
-      setState(() => _apps = true);
-      await _afterAlertsOn();
-    } catch (_) {
-      if (!mounted) return;
-      ProfileScreen._show(context, 'Could not turn on UPI app alerts. Try again');
-    }
-  }
-
-  Future<void> _afterAlertsOn() async {
-    try {
-      await Notifier.askPermission();
-    } catch (error) {
-      debugPrint('Notification permission: $error');
-    }
-    try {
-      await widget.onCheckSms?.call();
-    } catch (error) {
-      debugPrint('Payment alert watch: $error');
-    }
-  }
-
-  Future<void> _setPayments(bool value) async {
-    setState(() => _payments = value);
-    await Notifier.setOn(paymentAlertsKey, value);
-  }
-
-  Future<void> _setBudgets(bool value) async {
-    setState(() => _budgets = value);
-    await Notifier.setOn(budgetAlertsKey, value);
-  }
-
-  Future<void> _setReminders(bool value) async {
-    setState(() => _reminders = value);
-    final schedules = await widget.ledger.schedules().catchError(
-      (_) => <Schedule>[],
-    );
-    await Reminders.setEnabled(value, schedules);
-  }
-
-  Future<void> _setSms(bool value) async {
-    if (!value) {
-      await SmsInbox.disable();
-      if (mounted) setState(() => _sms = false);
-      return;
-    }
-    try {
-      final problem = await SmsInbox.enable();
-      if (!mounted) return;
-      if (problem != null) {
-        ProfileScreen._show(context, problem);
-        return;
-      }
-      setState(() => _sms = true);
-      await _afterAlertsOn();
-    } catch (_) {
-      if (!mounted) return;
-      ProfileScreen._show(context, 'Could not turn on bank SMS. Try again');
-    }
-  }
-
-  Future<void> _allow(String sender) async {
-    await SmsInbox.allowSender(sender);
-    await _load();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const title = TextStyle(color: Colors.white);
-    const subtitle = TextStyle(color: _muted, fontSize: 13);
-    return Column(
-      children: [
-        _SettingsSection(
-      title: 'Alerts',
-      children: [
-        SwitchListTile(
-          value: _reminders,
-          onChanged: _setReminders,
-          secondary: const Icon(LucideIcons.bellRing, color: Colors.white),
-          title: const Text('Bill & salary reminders', style: title),
-          subtitle: const Text(
-            'Notify the day before a bill, on salary day, and at the time you planned',
-            style: subtitle,
-          ),
-          activeThumbColor: const Color(0xFF17310C),
-          activeTrackColor: const Color(0xFFC8F57A),
-        ),
-        ListTile(
-          leading: Icon(
-            _serverPush ? LucideIcons.cloudCheck : LucideIcons.cloudOff,
-            color: Colors.white,
-          ),
-          title: const Text('Server push', style: title),
-          subtitle: Text(
-            _serverPush
-                ? 'On: planned entries, bills due tomorrow and a Sunday summary arrive even when the app is closed'
-                : 'Off: reminders come from this phone only. Push turns on once Firebase is set up',
-            style: subtitle,
-          ),
-        ),
-        SwitchListTile(
-          value: _budgets,
-          onChanged: _setBudgets,
-          secondary: const Icon(LucideIcons.gauge, color: Colors.white),
-          title: const Text('Budget alerts', style: title),
-          subtitle: const Text(
-            'Notify when a category reaches 80% and when it goes over',
-            style: subtitle,
-          ),
-          activeThumbColor: const Color(0xFF17310C),
-          activeTrackColor: const Color(0xFFC8F57A),
-        ),
-        if (SmsInbox.supported)
-          SwitchListTile(
-            value: _payments,
-            onChanged: _setPayments,
-            secondary: const Icon(LucideIcons.bellPlus, color: Colors.white),
-            title: const Text('New payment notifications', style: title),
-            subtitle: const Text(
-              'A bank SMS or UPI app shows a payment? Get a notification to save it, even when the app is closed',
-              style: subtitle,
-            ),
-            activeThumbColor: const Color(0xFF17310C),
-            activeTrackColor: const Color(0xFFC8F57A),
-          ),
-        if (SmsInbox.supported) ...[
-          SwitchListTile(
-            value: _sms,
-            onChanged: _setSms,
-            secondary: const Icon(
-              LucideIcons.messageSquareText,
-              color: Colors.white,
-            ),
-            title: const Text('Read bank SMS', style: title),
-            subtitle: const Text(
-              'When a bank text arrives, its notification asks where the money went. The message stays on this phone.',
-              style: subtitle,
-            ),
-            activeThumbColor: const Color(0xFF17310C),
-            activeTrackColor: const Color(0xFFC8F57A),
-          ),
-          if (upiAlertsBuild)
-          SwitchListTile(
-            value: _apps,
-            onChanged: _setApps,
-            secondary: const Icon(LucideIcons.smartphone, color: Colors.white),
-            title: const Text('Read UPI app alerts', style: title),
-            subtitle: const Text(
-              'GPay, PhonePe, Paytm, BHIM and CRED payments, the moment they arrive',
-              style: subtitle,
-            ),
-            activeThumbColor: const Color(0xFF17310C),
-            activeTrackColor: const Color(0xFFC8F57A),
-          ),
-        ],
-      ],
-    ),
-        const SizedBox(height: 22),
-        _SettingsSection(
-          title: 'Spam',
-          children: _spam.isEmpty
-              ? const [
-                  ListTile(
-                    leading: Icon(LucideIcons.shield, color: Colors.white),
-                    title: Text('No spam senders', style: TextStyle(color: Colors.white)),
-                    subtitle: Text(
-                      'A sender you mark as spam on a payment alert is listed here',
-                      style: TextStyle(color: _muted, fontSize: 13),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: Text(
+                      person.name.isEmpty ? 'Your name' : person.name,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                ]
-              : [
-                  for (final sender in _spam)
-                    ListTile(
-                      leading: const Icon(LucideIcons.shieldAlert, color: Color(0xFFFF6B6B)),
-                      title: Text(sender, style: title),
-                      subtitle: const Text(
-                        'Payment alerts from this sender are skipped',
-                        style: subtitle,
-                      ),
-                      trailing: TextButton(
-                        onPressed: () => _allow(sender),
-                        child: const Text('Allow'),
-                      ),
-                    ),
+                  IconButton(
+                    tooltip: 'Edit name',
+                    onPressed: _editName,
+                    icon: const Icon(LucideIcons.pencil, size: 18, color: _lime),
+                  ),
                 ],
-        ),
-      ],
+              ),
+              if (started != null)
+                GestureDetector(
+                  onTap: () => _editStarted(person),
+                  child: Text(
+                    'Since ${formatStarted(started)}',
+                    style: const TextStyle(color: _muted, fontSize: 15),
+                  ),
+                ),
+              if (person.age != null)
+                Text(
+                  '${person.age} years',
+                  style: const TextStyle(color: _muted, fontSize: 15),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _NameSheet extends StatefulWidget {
+  const _NameSheet({required this.initial});
+
+  final String initial;
+
+  @override
+  State<_NameSheet> createState() => _NameSheetState();
+}
+
+class _NameSheetState extends State<_NameSheet> {
+  late final TextEditingController _name = TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFF3A3A3C),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            'Your name',
+            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _name,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(
+              hintText: 'Name',
+              filled: true,
+              fillColor: _card,
+            ),
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, _name.text.trim()),
+            style: FilledButton.styleFrom(
+              backgroundColor: _lime,
+              foregroundColor: const Color(0xFF17310C),
+              minimumSize: const Size.fromHeight(48),
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
     );
   }
 }

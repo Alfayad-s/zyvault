@@ -30,10 +30,12 @@ class ReplyVoice {
 
   static Future<void> _prepare() async {
     if (_ready) return;
-    final engines = await _tts.getEngines;
-    debugPrint('TTS engines: $engines');
-    if (engines is List && engines.contains('com.google.android.tts')) {
-      await _tts.setEngine('com.google.android.tts');
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      final engines = await _tts.getEngines;
+      debugPrint('TTS engines: $engines');
+      if (engines is List && engines.contains('com.google.android.tts')) {
+        await _tts.setEngine('com.google.android.tts');
+      }
     }
     await _tts.setSpeechRate(0.5);
     await _tts.setVolume(1);

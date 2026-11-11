@@ -274,7 +274,7 @@ class _SmsReviewState extends State<SmsReview> {
         backgroundColor: _card,
         title: const Text('Report as spam?'),
         content: Text(
-          'Messages from ${senderKey(sms.sender)} will not be asked about again. You can allow them again in Profile.',
+          'Messages from ${senderKey(sms.sender)} will not be asked about again. You can allow them again in Settings.',
         ),
         actions: [
           TextButton(

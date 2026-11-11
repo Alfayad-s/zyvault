@@ -9,6 +9,7 @@ export const askIntents = [
   'people',
   'goals',
   'budgets',
+  'explain',
   'unknown',
 ] as const;
 
@@ -27,6 +28,7 @@ export type AskPlan = {
   compare: boolean;
   sort: 'latest' | 'biggest';
   limit: number;
+  reply: string;
 };
 
 export type ChartPoint = { label: string; value: number; categoryName?: string; kind?: string };
@@ -107,13 +109,160 @@ export function readPlan(raw: unknown, today: string): AskPlan {
     compare: item.compare === true,
     sort: item.sort === 'biggest' ? 'biggest' : 'latest',
     limit: Math.min(20, Math.max(1, limit)),
+    reply: text(item.reply) ?? '',
   };
 }
 
-const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export type AskLanguage = 'en' | 'ml' | 'mg';
 
-export function shortDate(day: string): string {
-  return `${Number(day.slice(8, 10))} ${monthNames[Number(day.slice(5, 7)) - 1]}`;
+const malayalamScript = /[\u0D00-\u0D7F]/;
+const manglishWord =
+  /\b(ethra|ethrayanu|ethre|evide|evideya|enthu|entha|undu|unda|chilavu|chilavayi|chilavayathu|kitti|kittiyathu|baakki|bakki|kodukkanam|koduthu|innale|innu|shambalam|aaranu|aarokke|maasam|aazhcha|vangi|adachu)\b/i;
+
+/** Malayalam written in English letters, and not Malayalam script. */
+export function isManglish(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed || malayalamScript.test(trimmed)) return false;
+  return manglishWord.test(trimmed);
+}
+
+/** A free-form reply counts as Manglish when it uses those words and no Malayalam script. */
+export function isManglishReply(text: string): boolean {
+  return isManglish(text);
+}
+
+/**
+ * Malayalam or Manglish selected on the chip wins.
+ * An English chip still follows a Manglish question.
+ * With no chip, Malayalam script stays Malayalam and Manglish typing stays Manglish.
+ */
+export function resolveLanguage(selected: string | undefined, text: string): AskLanguage {
+  if (selected === 'ml' || selected === 'mg') return selected;
+  if (selected === 'en') return isManglish(text) ? 'mg' : 'en';
+  if (malayalamScript.test(text)) return 'ml';
+  if (isManglish(text)) return 'mg';
+  return 'en';
+}
+
+const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const monthNamesMl = [
+  'ജനുവരി',
+  'ഫെബ്രുവരി',
+  'മാർച്ച്',
+  'ഏപ്രിൽ',
+  'മേയ്',
+  'ജൂൺ',
+  'ജൂലൈ',
+  'ഓഗസ്റ്റ്',
+  'സെപ്റ്റംബർ',
+  'ഒക്ടോബർ',
+  'നവംബർ',
+  'ഡിസംബർ',
+];
+const monthInMl = [
+  'ജനുവരിയിൽ',
+  'ഫെബ്രുവരിയിൽ',
+  'മാർച്ചിൽ',
+  'ഏപ്രിലിൽ',
+  'മേയിൽ',
+  'ജൂണിൽ',
+  'ജൂലൈയിൽ',
+  'ഓഗസ്റ്റിൽ',
+  'സെപ്റ്റംബറിൽ',
+  'ഒക്ടോബറിൽ',
+  'നവംബറിൽ',
+  'ഡിസംബറിൽ',
+];
+const monthNamesMg = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+const monthInMg = [
+  'Januaryil',
+  'Februaryil',
+  'Marchil',
+  'Aprilil',
+  'Mayil',
+  'June-il',
+  'Julyil',
+  'Augustil',
+  'Septemberil',
+  'Octoberil',
+  'Novemberil',
+  'Decemberil',
+];
+const periodMg: Record<string, string> = {
+  today: 'innu',
+  yesterday: 'innale',
+  'this month': 'ee maasam',
+  'last month': 'kazhinja maasam',
+  'this week': 'ee aazhcha',
+  'last week': 'kazhinja aazhcha',
+  'this year': 'ee varsham',
+  'in the last 7 days': 'kazhinja 7 divasathil',
+  'last 7 days': 'kazhinja 7 divasathil',
+  'in the last 3 months': 'kazhinja 3 maasathil',
+  'last 3 months': 'kazhinja 3 maasathil',
+};
+const periodMl: Record<string, string> = {
+  today: 'ഇന്ന്',
+  yesterday: 'ഇന്നലെ',
+  'this month': 'ഈ മാസം',
+  'last month': 'കഴിഞ്ഞ മാസം',
+  'this week': 'ഈ ആഴ്ച',
+  'last week': 'കഴിഞ്ഞ ആഴ്ച',
+  'this year': 'ഈ വർഷം',
+  'in the last 7 days': 'കഴിഞ്ഞ 7 ദിവസത്തിൽ',
+  'last 7 days': 'കഴിഞ്ഞ 7 ദിവസത്തിൽ',
+  'in the last 3 months': 'കഴിഞ്ഞ 3 മാസത്തിൽ',
+  'last 3 months': 'കഴിഞ്ഞ 3 മാസത്തിൽ',
+};
+
+function monthIndex(name: string): number {
+  return monthNames.findIndex((month) => name.toLowerCase().startsWith(month.toLowerCase()));
+}
+
+function translateDay(text: string, language: AskLanguage): string {
+  const match = /^(\d{1,2})\s+([A-Za-z]+)/.exec(text.trim());
+  if (!match) return text.trim();
+  const index = monthIndex(match[2]);
+  if (index < 0) return text.trim();
+  const names = language === 'mg' ? monthNamesMg : monthNamesMl;
+  return `${Number(match[1])} ${names[index]}`;
+}
+
+/** A period phrase the reply can say, in the language selected on the type page. */
+export function speakPeriod(label: string, language: AskLanguage = 'en'): string {
+  if (language === 'en') return label;
+  const known = (language === 'mg' ? periodMg : periodMl)[label.trim().toLowerCase()];
+  if (known) return known;
+  const inMonth = /^in\s+([A-Za-z]+)$/.exec(label.trim());
+  if (inMonth) {
+    const index = monthIndex(inMonth[1]);
+    if (index >= 0) return (language === 'mg' ? monthInMg : monthInMl)[index];
+  }
+  const range = /^from\s+(.+?)\s+to\s+(.+)$/i.exec(label.trim());
+  if (range) {
+    const from = translateDay(range[1], language);
+    const to = translateDay(range[2], language);
+    return language === 'mg' ? `${from} muthal ${to} vare` : `${from} മുതൽ ${to} വരെ`;
+  }
+  return label;
+}
+
+export function shortDate(day: string, language: AskLanguage = 'en'): string {
+  const names = language === 'ml' ? monthNamesMl : language === 'mg' ? monthNamesMg : monthNames;
+  return `${Number(day.slice(8, 10))} ${names[Number(day.slice(5, 7)) - 1]}`;
 }
 
 export function periodLabel(from: string, to: string, today: string): string {
@@ -196,19 +345,49 @@ export function byCategory(rows: AskRow[]): ChartPoint[] {
     .sort((a, b) => b.value - a.value);
 }
 
-export function scope(plan: AskPlan, accountName: string | null): string {
+export function scope(plan: AskPlan, accountName: string | null, language: AskLanguage = 'en'): string {
   const parts: string[] = [];
+  if (language === 'ml') {
+    if (plan.categories.length > 0) parts.push(`${plan.categories.join(', ')}-ന്`);
+    if (plan.search) parts.push(`${plan.search}-യിൽ`);
+    if (accountName) parts.push(`${accountName}-ൽ നിന്ന്`);
+    return parts.length > 0 ? ` ${parts.join(' ')}` : '';
+  }
+  if (language === 'mg') {
+    if (plan.categories.length > 0) parts.push(`${plan.categories.join(', ')}-nu`);
+    if (plan.search) parts.push(`${plan.search}-il`);
+    if (accountName) parts.push(`${accountName}-il ninnu`);
+    return parts.length > 0 ? ` ${parts.join(' ')}` : '';
+  }
   if (plan.categories.length > 0) parts.push(`on ${plan.categories.join(', ')}`);
   if (plan.search) parts.push(`at ${plan.search}`);
   if (accountName) parts.push(`from ${accountName}`);
   return parts.length > 0 ? ` ${parts.join(' ')}` : '';
 }
 
-export function compareText(now: number, before: number): string {
+export function compareText(now: number, before: number, language: AskLanguage = 'en'): string {
   if (before === 0 && now === 0) return '';
-  if (before === 0) return ' Nothing in the period before.';
+  if (before === 0) {
+    if (language === 'ml') return ' അതിനു മുൻപുള്ള കാലയളവിൽ ഒന്നും ഉണ്ടായിരുന്നില്ല.';
+    if (language === 'mg') return ' athinu munpullathil onnum illayirunnu.';
+    return ' Nothing in the period before.';
+  }
   const change = now - before;
-  if (change === 0) return ' Same as the period before.';
+  if (change === 0) {
+    if (language === 'ml') return ' കഴിഞ്ഞ കാലയളവിന് തുല്യമാണ്.';
+    if (language === 'mg') return ' kazhinja kalayathinu thulyamanu.';
+    return ' Same as the period before.';
+  }
   const percent = Math.round((Math.abs(change) / before) * 100);
+  if (language === 'ml') {
+    return change > 0
+      ? ` കഴിഞ്ഞ കാലയളവിനേക്കാൾ ${rupees(change)} കൂടുതലാണ് (${percent}%).`
+      : ` കഴിഞ്ഞ കാലയളവിനേക്കാൾ ${rupees(change)} കുറവാണ് (${percent}%).`;
+  }
+  if (language === 'mg') {
+    return change > 0
+      ? ` kazhinja kalayathinekkal ${rupees(change)} kooduthalanu (${percent}%).`
+      : ` kazhinja kalayathinekkal ${rupees(change)} kuravanu (${percent}%).`;
+  }
   return ` That is ${rupees(change)} ${change > 0 ? 'more' : 'less'} than the period before (${percent}%).`;
 }

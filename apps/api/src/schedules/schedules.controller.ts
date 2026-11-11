@@ -13,6 +13,8 @@ import {
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, Matches } from 'class-validator';
 import type { AuthUser } from '../auth/auth-user.js';
 import { AuthGuard } from '../auth/auth.guard.js';
+import { Feature } from '../access/feature.decorator.js';
+import { FeatureGuard } from '../access/feature.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { SchedulesService } from './schedules.service.js';
 
@@ -61,7 +63,8 @@ export class RunSchedulesDto {
 }
 
 @Controller('schedules')
-@UseGuards(AuthGuard)
+@Feature('plans')
+@UseGuards(AuthGuard, FeatureGuard)
 export class SchedulesController {
   constructor(private readonly schedules: SchedulesService) {}
 

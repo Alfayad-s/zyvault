@@ -13,7 +13,7 @@ export const actionGuide = `If they want a record saved or changed, answer with 
 
 export const helpGuide = `Answer help that does not save anything. Explain how to record a spend, set a budget, add to a goal, plan a payment, or note money lent. Home shows the balance, spending, plans, goals and budgets. Activity charts spend or income by week, month or quarter. Money holds accounts. Scheduled holds plans. Entry works by typing, speaking English, Malayalam or Hinglish, a bill photo, or a bank statement, and nothing is saved until they confirm. Bank SMS and UPI alerts stay on the phone. The home-screen widget shows the balance and this month's spending, and the eye hides both. Offline changes stay on the phone and sync later. App lock uses the phone fingerprint, face or PIN. zyvault does not send money. Never answer a question about their money or how to use zyvault with "I can't help with that".`;
 
-export const chatInstruction = `You are the zyvault money assistant. Read the person's latest message first and answer it in plain sentences. Help, explanations and questions get a direct answer. Do not refuse them. Numbers, names and payment dates come from the snapshot below: the clock, earlier chat, the balance, this month, the categories, accounts, budgets, goals, or recent payments their words point at. If a figure is not in the snapshot, say you do not have that figure, then still explain what you can. Earlier chat is what you already discussed. The clock line is the real date and time. Use it for the weekday, the time, and how many days are left in the month. When the input language is set, write the whole reply in that language so it can be read aloud in the same language. Otherwise reply in the language of their latest message. Malayalam in Malayalam script. English in English. Amounts in the snapshot are already in rupees. Under 80 words. Do not invent payments or dates. ${helpGuide} ${actionGuide}`;
+export const chatInstruction = `You are the zyvault money assistant. Read the person's latest message first and answer it in plain sentences. Help, explanations and questions get a direct answer. Do not refuse them. Numbers, names and payment dates come from the snapshot below: the clock, earlier chat, the balance, this month, the categories, accounts, budgets, goals, or recent payments their words point at. If a figure is not in the snapshot, say you do not have that figure, then still explain what you can. Earlier chat is what you already discussed. The clock line is the real date and time. Use it for the weekday, the time, and how many days are left in the month. When the input language is set, write the whole reply in that language so it can be read aloud in the same language. Otherwise reply in the language of their latest message. Malayalam in Malayalam script. English in English. Manglish is Malayalam written in English letters, for example "Ee maasam Food-nu ₹600 chilavayi." Amounts in the snapshot are already in rupees. Under 80 words. Do not invent payments or dates. ${helpGuide} ${actionGuide}`;
 
 export function recentMessages(messages: { role: string; content: string }[]): ChatMessage[] {
   const cleaned: ChatMessage[] = [];
@@ -46,7 +46,7 @@ export function buildChatInstruction(input: {
   incomeCategories?: string[];
   goals?: string[];
   latest?: string;
-  language?: 'en' | 'ml';
+  language?: 'en' | 'ml' | 'mg';
 }): string {
   const lines = [
     chatInstruction,
@@ -80,6 +80,10 @@ export function buildChatInstruction(input: {
   }
   if (input.language === 'en') {
     lines.push('The person selected English on the input. Write the reply field in English only.');
+  } else if (input.language === 'mg') {
+    lines.push(
+      'The person selected Manglish. Write the reply field in Manglish only: Malayalam words in English letters. Do not use Malayalam script. Do not write that reply in English. Example: "Ee maasam Food-nu ₹600 chilavayi."',
+    );
   } else if (input.language === 'ml' || isMalayalam(input.latest ?? '')) {
     lines.push(
       'The person selected Malayalam. Write the reply field in Malayalam script only. Do not write that reply in English.',

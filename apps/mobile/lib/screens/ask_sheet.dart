@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:finance_track/models.dart';
 import 'package:finance_track/money.dart';
+import 'package:finance_track/reply_voice.dart';
 import 'package:finance_track/widgets/category_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 const _card = Color(0xFF2C2C2E);
 const _line = Color(0xFF3A3A3C);
@@ -14,12 +18,26 @@ final _questionStart = RegExp(
   r'^(how|what|whats|where|who|whom|which|when|why|show|list|tell|did|do|does|am|is|are|was|were|have|has|can|total|kitna|kitne|kitni|kya|kaha|ethra|ethrayanu|evide|enthu|entha|aarokke|aaru)\b',
 );
 final _questionWords = RegExp(
-  r'\b(ethra|kitna|kitne|evide|how much|how many)\b',
+  r'\b(ethra|kitna|kitne|evide|how much|how many|explain|savings plan|give me a plan|make a plan)\b',
 );
+
+final _author = RegExp(
+  r'\b(who (made|built|created|developed|wrote)( this| the| zyvault)?|who is the author|author of (this|the|zyvault))\b',
+);
+
+bool looksLikeAuthor(String text) {
+  final lower = text.trim().toLowerCase();
+  if (lower.isEmpty) return false;
+  if (_author.hasMatch(lower)) return true;
+  if (lower.contains('ആര്') && lower.contains('ഉണ്ടാക്കി')) return true;
+  return RegExp(r'\b(aar|aaru|aaranu)\b').hasMatch(lower) &&
+      RegExp(r'\b(undakkiy|author|made|built|created)\b').hasMatch(lower);
+}
 
 bool looksLikeQuestion(String text) {
   final lower = text.trim().toLowerCase();
   if (lower.isEmpty) return false;
+  if (looksLikeAuthor(lower)) return false;
   if (lower.endsWith('?')) return true;
   if (_questionStart.hasMatch(lower)) return true;
   if (lower.contains('എത്ര') ||
@@ -34,6 +52,7 @@ Future<void> showAskAnswer(
   BuildContext context, {
   required String question,
   required AskAnswer answer,
+  String language = 'en',
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -52,6 +71,7 @@ Future<void> showAskAnswer(
       builder: (context, controller) => AskAnswerView(
         question: question,
         answer: answer,
+        language: language,
         controller: controller,
       ),
     ),
@@ -63,11 +83,13 @@ class AskAnswerView extends StatelessWidget {
     super.key,
     required this.question,
     required this.answer,
+    this.language = 'en',
     this.controller,
   });
 
   final String question;
   final AskAnswer answer;
+  final String language;
   final ScrollController? controller;
 
   @override
@@ -108,12 +130,16 @@ class AskAnswerView extends StatelessWidget {
         const SizedBox(height: 12),
         Text(
           answer.answer,
-          style: const TextStyle(
+          style: TextStyle(
             color: Colors.white,
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-            height: 1.3,
+            fontSize: answer.intent == 'explain' ? 16 : 22,
+            fontWeight: answer.intent == 'explain' ? FontWeight.w400 : FontWeight.w700,
+            height: answer.intent == 'explain' ? 1.45 : 1.3,
           ),
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: _ReadAloud(text: answer.answer, language: language),
         ),
         if (answer.chart.isNotEmpty) ...[
           const SizedBox(height: 20),
@@ -146,6 +172,70 @@ class AskAnswerView extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _ReadAloud extends StatefulWidget {
+  const _ReadAloud({required this.text, required this.language});
+
+  final String text;
+  final String language;
+
+  @override
+  State<_ReadAloud> createState() => _ReadAloudState();
+}
+
+class _ReadAloudState extends State<_ReadAloud> {
+  var _speaking = false;
+
+  @override
+  void dispose() {
+    if (_speaking) unawaited(ReplyVoice.stop());
+    super.dispose();
+  }
+
+  Future<void> _toggle() async {
+    if (_speaking) {
+      await ReplyVoice.stop();
+      if (mounted) setState(() => _speaking = false);
+      return;
+    }
+    setState(() => _speaking = true);
+    final malayalam =
+        widget.language != 'mg' &&
+        (widget.language == 'ml' ||
+            RegExp(r'[\u0D00-\u0D7F]').hasMatch(widget.text));
+    final problem = await ReplyVoice.speak(
+      widget.text,
+      language: malayalam ? 'ml' : 'en',
+      onDone: () {
+        if (mounted) setState(() => _speaking = false);
+      },
+    );
+    if (!mounted) return;
+    if (problem != null) {
+      setState(() => _speaking = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(problem)));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final malayalam = widget.language == 'ml';
+    return TextButton.icon(
+      onPressed: _toggle,
+      icon: Icon(
+        _speaking ? LucideIcons.square : LucideIcons.volume2,
+        size: 16,
+        color: _lime,
+      ),
+      label: Text(
+        _speaking
+            ? (malayalam ? 'നിർത്തുക' : 'Stop')
+            : (malayalam ? 'വായിക്കുക' : 'Read'),
+        style: const TextStyle(color: _lime),
+      ),
     );
   }
 }
@@ -371,6 +461,90 @@ class _TimeBars extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+const _authorSite = 'https://alfayad.vercel.app';
+const _authorImage = 'https://alfayad.vercel.app/og-image.png';
+
+Future<void> showAuthor(BuildContext context) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: const Color(0xFF161616),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    builder: (context) => const _AuthorCard(),
+  );
+}
+
+class _AuthorCard extends StatelessWidget {
+  const _AuthorCard();
+
+  Future<void> _open() async {
+    await launchUrl(Uri.parse(_authorSite), mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(color: _line, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            'Alfayad S',
+            style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          const Text('Author of zyvault', style: TextStyle(color: _muted, fontSize: 15)),
+          const SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Image.network(
+              _authorImage,
+              height: 180,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) return child;
+                return const SizedBox(
+                  height: 180,
+                  child: Center(child: CircularProgressIndicator(color: _lime)),
+                );
+              },
+              errorBuilder: (context, error, stack) => Container(
+                height: 180,
+                color: _card,
+                alignment: Alignment.center,
+                child: const Text('Preview unavailable', style: TextStyle(color: _muted)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextButton(
+            onPressed: _open,
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              foregroundColor: _lime,
+              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            child: const Text('alfayad.vercel.app'),
+          ),
+        ],
+      ),
     );
   }
 }

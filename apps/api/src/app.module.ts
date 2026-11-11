@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { FinanceInfraModule, FinanceModule } from './finance/finance.module.js';
+import { AccessModule } from './access/access.module.js';
 import { AccountModule } from './account/account.module.js';
 import { AccountsModule } from './accounts/accounts.module.js';
 import { AgentModule } from './agent/agent.module.js';
@@ -28,6 +29,7 @@ import { TransactionsModule } from './transactions/transactions.module.js';
     FinanceInfraModule,
     SupabaseModule,
     AuthModule,
+    AccessModule,
     AccountModule,
     AccountsModule,
     CategoriesModule,
