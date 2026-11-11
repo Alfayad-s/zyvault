@@ -43,7 +43,7 @@ export type Transaction = {
 };
 
 const transactionSelect =
-  'id, account_id, category_id, amount, kind, occurred_on, note, account:accounts(name), category:categories(name)';
+  'id, account_id, category_id, amount, kind, occurred_on, note, account:accounts!account_id(name), category:categories(name)';
 const transactionSelectWithCard = `${transactionSelect}, card_effect, card_id`;
 
 function relatedName(value: Relation<{ name: string }>): string {

@@ -132,7 +132,7 @@ export class AskService {
       this.supabase
         .from('transactions')
         .select(
-          'amount, kind, occurred_on, note, account_id, category:categories(name), account:accounts(name)',
+          'amount, kind, occurred_on, note, account_id, category:categories(name), account:accounts!account_id(name)',
         )
         .eq('user_id', userId)
         .gte('occurred_on', from)
